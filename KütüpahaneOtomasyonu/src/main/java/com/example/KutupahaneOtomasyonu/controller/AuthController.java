@@ -29,7 +29,7 @@ public class AuthController {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-    }//denem
+    }//deneme
 
     // --- GİRİŞ YAPMA (LOGIN) ---
     @PostMapping("/login")
