@@ -1,5 +1,5 @@
 package com.example.KutupahaneOtomasyonu.config;
-
+//fweıufuw
 import com.example.KutupahaneOtomasyonu.entity.*;
 import com.example.KutupahaneOtomasyonu.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
