@@ -19,14 +19,13 @@ public class Borrowing {
     @Column(name = "borrow_id")
     private Integer borrowId;
 
-    // --- SİHİRLİ DOKUNUŞ BURADA ---
-    // Bu satır: "Üye detaylarını getir ama derinlere inip kaybolma" der.
+    // Üye Bilgisi (Sonsuz döngüyü önlemek için JsonIgnoreProperties var)
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "member_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "borrowings", "password"})
     private Member member;
 
-    // Bu satır: "Kitabı getir ama kitabın içindeki detaylarda kaybolma" der.
+    // Kitap Bilgisi
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "book_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "borrowings", "addedByAdmin"})
@@ -44,4 +43,10 @@ public class Borrowing {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BorrowingStatus status;
+
+    // --- DÜZELTİLEN KISIM ---
+    // Küçük 'boolean' yerine büyük 'Boolean' kullandık.
+    // Böylece veritabanındaki NULL değerler hataya sebep olmaz.
+    @Column(name = "fine_paid")
+    private Boolean finePaid = false;
 }

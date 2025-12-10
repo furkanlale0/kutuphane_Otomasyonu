@@ -5,12 +5,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 
 @Entity
@@ -18,62 +13,35 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Admin implements UserDetails { // <-- ARTIK USERDETAILS UYUMLU!
+public class Admin {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "admin_id")
     private Integer adminId;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String username;
 
     @Column(nullable = false)
     private String password;
 
     private String name;
+
     private String surname;
+
     private String email;
 
+    // --- KRİTİK KISIM: Role Enum Kullanımı ---
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Role role;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    // Bu adminin eklediği kitaplar (İsteğe bağlı ilişki)
     @OneToMany(mappedBy = "addedByAdmin", fetch = FetchType.LAZY)
-    @JsonIgnore
-    private List<Book> addedBooks;
-
-    public enum Role {
-        SUPERADMIN, STAFF
-    }
-
-    // --- USERDETAILS ZORUNLU METOTLARI ---
-
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Rolü Spring Security'nin anlayacağı dile çeviriyoruz
-        return List.of(new SimpleGrantedAuthority(role.name()));
-    }
-
-    @Override
-    public boolean isAccountNonExpired() {
-        return true; // Hesap süresi dolmadı
-    }
-
-    @Override
-    public boolean isAccountNonLocked() {
-        return true; // Hesap kilitli değil
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true; // Şifre süresi dolmadı
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return true; // Hesap aktif
-    }
+    @JsonIgnore // Sonsuz döngüye girmemesi için önemli
+    private List<Book> books;
 }

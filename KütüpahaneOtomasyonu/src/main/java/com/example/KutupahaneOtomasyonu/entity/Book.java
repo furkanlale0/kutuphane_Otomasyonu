@@ -1,6 +1,6 @@
 package com.example.KutupahaneOtomasyonu.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -22,22 +22,23 @@ public class Book {
     private String title;
 
     private String isbn;
+
+    @Column(name = "publication_year")
     private Integer year;
-    private String category;
 
-    @Column(columnDefinition = "INT DEFAULT 1")
-    private int copies;
+    private Integer copies;
 
-    // Yazar bilgisi önemli, onu getiriyoruz (EAGER)
+    // YENİ EKLENEN ALAN: ÖZET
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "author_id", nullable = false)
     private Author author;
 
-    // --- SORUN BURADAYDI ---
-    // Kitabı kimin eklediği bilgisini JSON'a çevirirken GÖRMEZDEN GEL (@JsonIgnore)
-    // Yoksa "LazyInitializationException" veya Sonsuz Döngü hatası verir.
+    // Admin tarafından mı eklendi?
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "added_by_admin")
-    @JsonIgnore
+    @JoinColumn(name = "added_by")
+    @JsonIgnoreProperties({"books", "password", "hibernateLazyInitializer"})
     private Admin addedByAdmin;
 }
