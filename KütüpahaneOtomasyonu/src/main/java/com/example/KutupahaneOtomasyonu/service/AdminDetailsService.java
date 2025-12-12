@@ -2,7 +2,6 @@ package com.example.KutupahaneOtomasyonu.service;
 
 import com.example.KutupahaneOtomasyonu.entity.Admin;
 import com.example.KutupahaneOtomasyonu.entity.Member;
-import com.example.KutupahaneOtomasyonu.repository.MemberRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,17 +15,17 @@ import java.util.Optional;
 public class AdminDetailsService implements UserDetailsService {
 
     private final AdminService adminService;
-    private final MemberRepository memberRepository; // Üyeleri de arayabilmek için
+    private final MemberService memberService; // ARTIK REPOSITORY YOK, SERVICE VAR
 
     @Autowired
-    public AdminDetailsService(AdminService adminService, MemberRepository memberRepository) {
+    public AdminDetailsService(AdminService adminService, MemberService memberService) {
         this.adminService = adminService;
-        this.memberRepository = memberRepository;
+        this.memberService = memberService;
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // 1. Önce ADMIN tablosuna bak
+        // 1. Önce ADMIN servisine sor
         Optional<Admin> adminOptional = adminService.getByUsername(username);
 
         if (adminOptional.isPresent()) {
@@ -38,19 +37,18 @@ public class AdminDetailsService implements UserDetailsService {
                     .build();
         }
 
-        // 2. Admin değilse ÜYE tablosuna bak
-        Optional<Member> memberOptional = memberRepository.findByUsername(username);
+        // 2. Yoksa ÜYE servisine sor (Repository yerine Service kullandık)
+        Optional<Member> memberOptional = memberService.findByUsername(username);
 
         if (memberOptional.isPresent()) {
             Member member = memberOptional.get();
             return User.builder()
                     .username(member.getUsername())
                     .password(member.getPassword())
-                    .roles("MEMBER") // Rolünü MEMBER olarak belirle
+                    .roles("MEMBER")
                     .build();
         }
 
-        // 3. İkisinde de yoksa hata fırlat
         throw new UsernameNotFoundException("Kullanıcı bulunamadı: " + username);
     }
 }

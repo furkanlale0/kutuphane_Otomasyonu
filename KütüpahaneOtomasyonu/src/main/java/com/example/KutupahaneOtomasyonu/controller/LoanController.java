@@ -1,163 +1,107 @@
 package com.example.KutupahaneOtomasyonu.controller;
 
-import com.example.KutupahaneOtomasyonu.entity.Book;
-import com.example.KutupahaneOtomasyonu.entity.Borrowing;
-import com.example.KutupahaneOtomasyonu.entity.BorrowingStatus;
-import com.example.KutupahaneOtomasyonu.entity.Member;
-import com.example.KutupahaneOtomasyonu.repository.BookRepository;
-import com.example.KutupahaneOtomasyonu.repository.BorrowingRepository;
-import com.example.KutupahaneOtomasyonu.repository.MemberRepository;
+import com.example.KutupahaneOtomasyonu.service.LoanService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
+// @RestController: Bu sınıfın bir Web API olduğunu ve JSON cevabı döneceğini belirtir.
+// @RequestMapping: "localhost:8080/api/loans" adresine gelen istekler buraya düşer.
 @RestController
 @RequestMapping("/api/loans")
 public class LoanController {
 
-    private final BorrowingRepository borrowingRepository;
-    private final BookRepository bookRepository;
-    private final MemberRepository memberRepository;
+    // ARTIK REPOSITORY YOK, SERVICE VAR
+    // Veritabanı ile direkt konuşmuyoruz, kuralları bilen Servis ile konuşuyoruz.
+    private final LoanService loanService;
 
+    // Constructor Injection: Spring'e "Bana çalışan bir LoanService ver" diyoruz.
     @Autowired
-    public LoanController(BorrowingRepository borrowingRepository, BookRepository bookRepository, MemberRepository memberRepository) {
-        this.borrowingRepository = borrowingRepository;
-        this.bookRepository = bookRepository;
-        this.memberRepository = memberRepository;
+    public LoanController(LoanService loanService) {
+        this.loanService = loanService;
     }
 
-    // --- 1. ÖDÜNÇ ALMA ---
+    // --- KİTAP ÖDÜNÇ ALMA ---
+    // POST İsteği: /api/loans/borrow
+    // @RequestBody: Frontend'den gelen JSON verisini (memberId, bookId) alır.
     @PostMapping("/borrow")
     public ResponseEntity<?> borrowBook(@RequestBody LoanRequest request) {
-        Integer memberId = Integer.parseInt(request.getMemberId());
-        Integer bookId = request.getBookId();
+        // Servise emrediyoruz: "Bu üyeye bu kitabı ver."
+        // Not: request.getMemberId() String geldiği için Integer'a çeviriyoruz.
+        String result = loanService.borrowBook(Integer.parseInt(request.getMemberId()), request.getBookId());
 
-        boolean alreadyHas = borrowingRepository.existsByMember_MemberIdAndBook_BookIdAndReturnDateIsNull(memberId, bookId);
-        if (alreadyHas) return ResponseEntity.badRequest().body("Bu kitabı zaten ödünç almışsınız!");
-
-        Optional<Member> member = memberRepository.findById(memberId);
-        Optional<Book> book = bookRepository.findById(bookId);
-
-        if (member.isEmpty() || book.isEmpty()) return ResponseEntity.badRequest().body("Hata.");
-        Book b = book.get();
-        if (b.getCopies() <= 0) return ResponseEntity.badRequest().body("Stok yok!");
-
-        b.setCopies(b.getCopies() - 1);
-        bookRepository.save(b);
-
-        Borrowing borrowing = new Borrowing();
-        borrowing.setMember(member.get());
-        borrowing.setBook(b);
-        borrowing.setBorrowDate(LocalDateTime.now());
-        borrowing.setDueDate(LocalDateTime.now().plusDays(14));
-        borrowing.setStatus(BorrowingStatus.BORROWED);
-        borrowing.setFinePaid(false);
-        borrowingRepository.save(borrowing);
-        return ResponseEntity.ok("Ödünç alındı.");
+        // Servis bize işlem sonucunu String olarak döner ("OK" veya hata mesajı).
+        if ("OK".equals(result)) {
+            // Başarılıysa 200 OK
+            return ResponseEntity.ok("Ödünç alındı.");
+        }
+        // Başarısızsa (Stok yok, limit dolu vs.) 400 Bad Request ve hata mesajı.
+        return ResponseEntity.badRequest().body(result);
     }
 
-    // --- 2. İADE ETME ---
+    // --- KİTAP İADE ETME ---
+    // POST İsteği: /api/loans/return
     @PostMapping("/return")
     public ResponseEntity<?> returnBook(@RequestBody LoanRequest request) {
-        List<Borrowing> activeLoans = borrowingRepository.findByMember_MemberIdAndBook_BookIdAndReturnDateIsNull(
-                Integer.parseInt(request.getMemberId()), request.getBookId());
+        // Servise emrediyoruz: "Bu üye bu kitabı iade ediyor."
+        String result = loanService.returnBook(Integer.parseInt(request.getMemberId()), request.getBookId());
 
-        if (activeLoans.isEmpty()) return ResponseEntity.badRequest().body("Kitap sizde görünmüyor.");
-
-        Borrowing b = activeLoans.get(0);
-        b.setReturnDate(LocalDateTime.now());
-        b.setStatus(BorrowingStatus.RETURNED);
-        borrowingRepository.save(b);
-
-        Book book = b.getBook();
-        book.setCopies(book.getCopies() + 1);
-        bookRepository.save(book);
-        return ResponseEntity.ok("İade edildi.");
+        if ("OK".equals(result)) {
+            return ResponseEntity.ok("İade edildi.");
+        }
+        return ResponseEntity.badRequest().body(result);
     }
 
-    // --- 3. GEÇMİŞ ---
+    // --- GEÇMİŞ İŞLEMLERİ GÖRME ---
+    // GET İsteği: /api/loans/history?memberId=5
+    // @RequestParam: URL'deki '?memberId=...' kısmını okur.
     @GetMapping("/history")
     public List<Map<String, Object>> getMemberHistory(@RequestParam Integer memberId) {
-        List<Borrowing> history = borrowingRepository.findByMember_MemberId(memberId);
-        return mapBorrowings(history);
+        // Servisten bu üyenin tüm eski kayıtlarını istiyoruz.
+        // Map<String, Object> yapısı, özel bir veri formatı oluşturmak içindir (Kitap adı, tarih vs.).
+        return loanService.getMemberHistory(memberId);
     }
 
-    // --- 4. AKTİF ÖDÜNÇLER ---
+    // --- AKTİF ÖDÜNÇLERİ GÖRME ---
+    // GET İsteği: /api/loans/my-loans?memberId=5
+    // Üyenin şu an elinde olan (henüz iade etmediği) kitapları getirir.
     @GetMapping("/my-loans")
     public List<Map<String, Object>> getMyLoans(@RequestParam Integer memberId) {
-        List<Borrowing> borrowings = borrowingRepository.findByMember_MemberIdAndReturnDateIsNull(memberId);
-        return mapBorrowings(borrowings);
+        return loanService.getActiveLoans(memberId);
     }
 
-    // --- 5. CEZALAR (HATA BURADAYDI, DÜZELTİLDİ) ---
+    // --- (ADMIN) GECİKMİŞ CEZALARI GÖRME ---
+    // GET İsteği: /api/loans/admin/fines
+    // Sadece Admin'in görebileceği, cezası olan tüm işlemleri listeler.
     @GetMapping("/admin/fines")
     public List<Map<String, Object>> getAllFines() {
-        List<Borrowing> allLoans = borrowingRepository.findAll();
-        List<Map<String, Object>> fines = new ArrayList<>();
-
-        for (Borrowing b : allLoans) {
-            // DÜZELTME: isFinePaid() yerine getFinePaid() kullandık ve Null kontrolü yaptık.
-            if (Boolean.TRUE.equals(b.getFinePaid())) continue;
-
-            LocalDateTime effectiveReturnDate = (b.getReturnDate() != null) ? b.getReturnDate() : LocalDateTime.now();
-
-            if (effectiveReturnDate.isAfter(b.getDueDate())) {
-                long overdueDays = ChronoUnit.DAYS.between(b.getDueDate(), effectiveReturnDate);
-                if (overdueDays > 0) {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("borrowId", b.getBorrowId());
-                    item.put("memberName", b.getMember().getName() + " " + b.getMember().getSurname());
-                    item.put("bookTitle", b.getBook().getTitle());
-                    item.put("days", overdueDays);
-                    item.put("amount", overdueDays * 5.0);
-                    item.put("isReturned", b.getReturnDate() != null);
-                    fines.add(item);
-                }
-            }
-        }
-        return fines;
+        return loanService.getAllFines();
     }
 
-    // --- 6. CEZA TAHSİL ET ---
+    // --- (ADMIN) CEZA TAHSİL ETME ---
+    // POST İsteği: /api/loans/pay-fine/105 (105 burada işlem ID'sidir)
+    // @PathVariable: URL yolundaki ID'yi (105) alır.
     @PostMapping("/pay-fine/{id}")
     public ResponseEntity<?> payFine(@PathVariable Integer id) {
-        Optional<Borrowing> borrowing = borrowingRepository.findById(id);
-        if (borrowing.isPresent()) {
-            Borrowing b = borrowing.get();
-            b.setFinePaid(true);
-            borrowingRepository.save(b);
+        // Servise "Bu borç ödendi, sil" diyoruz.
+        boolean success = loanService.payFine(id);
+
+        if (success) {
             return ResponseEntity.ok("Tahsil edildi.");
         }
-        return ResponseEntity.badRequest().body("Kayıt yok.");
-    }
-
-    private List<Map<String, Object>> mapBorrowings(List<Borrowing> list) {
-        List<Map<String, Object>> responseList = new ArrayList<>();
-        for (Borrowing b : list) {
-            Map<String, Object> item = new HashMap<>();
-            item.put("bookId", b.getBook().getBookId());
-            item.put("bookTitle", b.getBook().getTitle());
-            item.put("borrowDate", b.getBorrowDate().toString());
-            item.put("dueDate", b.getDueDate().toString());
-            item.put("returnDate", (b.getReturnDate() != null) ? b.getReturnDate().toString() : null);
-            item.put("status", b.getStatus());
-            responseList.add(item);
-        }
-        return responseList;
+        return ResponseEntity.badRequest().body("Kayıt bulunamadı.");
     }
 }
 
+// DTO Sınıfı (Data Transfer Object)
+// Frontend'den gelen "Hangi üye? Hangi kitap?" verisini taşıyan basit bir kutudur.
 class LoanRequest {
-    private String memberId;
+    private String memberId; // Frontend bazen ID'leri tırnak içinde String yollayabilir, o yüzden String tutuyoruz.
     private Integer bookId;
+
     public String getMemberId() { return memberId; }
     public void setMemberId(String memberId) { this.memberId = memberId; }
     public Integer getBookId() { return bookId; }

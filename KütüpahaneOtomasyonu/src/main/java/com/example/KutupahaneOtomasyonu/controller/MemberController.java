@@ -1,67 +1,37 @@
 package com.example.KutupahaneOtomasyonu.controller;
 
-import com.example.KutupahaneOtomasyonu.entity.Borrowing;
-import com.example.KutupahaneOtomasyonu.entity.Member;
-import com.example.KutupahaneOtomasyonu.repository.BorrowingRepository;
-import com.example.KutupahaneOtomasyonu.repository.MemberRepository;
+import com.example.KutupahaneOtomasyonu.service.MemberService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.temporal.ChronoUnit;
-import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Map;
 
+// @RestController: Bu sınıfın bir Web API olduğunu ve geriye veri (JSON) döndüreceğini belirtir.
+// @RequestMapping: "localhost:8080/api/members" adresine gelen istekleri bu sınıf dinler.
 @RestController
 @RequestMapping("/api/members")
 public class MemberController {
 
-    @Autowired
-    private MemberRepository memberRepository;
+    // --- MİMARİ DÜZELTME ---
+    // Artık Repository (Veritabanı) yok, sadece Service (İş Mantığı) var.
+    // Controller -> Service -> Repository zincirini kurduk.
+    private final MemberService memberService;
 
+    // Constructor Injection: Spring'e "Çalışan bir MemberService örneğini buraya bağla" diyoruz.
     @Autowired
-    private BorrowingRepository borrowingRepository;
+    public MemberController(MemberService memberService) {
+        this.memberService = memberService;
+    }
 
+    // --- PROFİL VE CEZA DETAYLARINI GETİRME ---
+    // URL Örneği: /api/members/10/profile (ID'si 10 olan üye)
+    // @GetMapping: Veri okuma isteği.
+    // @PathVariable: URL'deki {id} kısmını (örn: 10) alıp 'Integer id' değişkenine atar.
     @GetMapping("/{id}/profile")
     public Map<String, Object> getProfile(@PathVariable Integer id) {
-        Member member = memberRepository.findById(id).orElseThrow();
-
-        // Üyenin TÜM geçmişini (İade edilmiş veya edilmemiş) getir
-        // Not: BorrowingRepository'de "findByMember_MemberId" metodunun olması lazım.
-        // Yoksa repository'e ekle: List<Borrowing> findByMember_MemberId(Integer memberId);
-        List<Borrowing> history = borrowingRepository.findByMember_MemberId(id);
-
-        double totalFine = 0;
-        List<Map<String, Object>> fineDetails = new ArrayList<>();
-
-        for (Borrowing b : history) {
-            long overdueDays = 0;
-            LocalDateTime effectiveReturnDate = (b.getReturnDate() != null) ? b.getReturnDate() : LocalDateTime.now();
-
-            // Eğer son teslim tarihi geçmişse
-            if (effectiveReturnDate.isAfter(b.getDueDate())) {
-                overdueDays = ChronoUnit.DAYS.between(b.getDueDate(), effectiveReturnDate);
-            }
-
-            if (overdueDays > 0) {
-                double fineAmount = overdueDays * 5.0; // GÜNLÜK 5 TL CEZA
-                totalFine += fineAmount;
-
-                Map<String, Object> detail = new HashMap<>();
-                detail.put("bookTitle", b.getBook().getTitle());
-                detail.put("days", overdueDays);
-                detail.put("amount", fineAmount);
-                fineDetails.add(detail);
-            }
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("name", member.getName());
-        response.put("surname", member.getSurname());
-        response.put("username", member.getUsername());
-        response.put("email", member.getEmail());
-        response.put("totalFine", totalFine);
-        response.put("fineDetails", fineDetails);
-
-        return response;
+        // Controller olarak biz hesap kitap (ceza hesaplama, borç toplama) yapmayız.
+        // Sadece Service'e "Bu ID'li üyenin profilini hazırla" deriz.
+        // Service bize içinde İsim, E-posta, Toplam Borç ve Ceza Detayları olan hazır bir paket (Map) döner.
+        return memberService.getMemberProfile(id);
     }
 }

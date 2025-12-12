@@ -33,11 +33,20 @@ public class BookService {
 
     @Transactional
     public Book save(Book book) {
+        // --- YENİ EKLENEN KONTROL ---
+        if (book.getCopies() == null || book.getCopies() < 1) {
+            throw new IllegalArgumentException("Stok adedi en az 1 olmalıdır!");
+        }
+
+        // Yazar kontrolü ve ekleme mantığı
         Author incomingAuthor = book.getAuthor();
         if (incomingAuthor != null && incomingAuthor.getName() != null) {
             String name = incomingAuthor.getName().trim();
             String surname = incomingAuthor.getSurname().trim();
+
+            // Yazar veritabanında var mı?
             Optional<Author> existingAuthor = authorRepository.findByNameAndSurname(name, surname);
+
             if (existingAuthor.isPresent()) {
                 book.setAuthor(existingAuthor.get());
             } else {
@@ -52,25 +61,21 @@ public class BookService {
         return bookRepository.save(book);
     }
 
-    // --- KRİTİK DEĞİŞİKLİK BURADA ---
     @Transactional
     public void deleteById(Integer id) {
-        // 1. Önce: Kitap ŞU AN birinde mi? (İade edilmemiş)
+        // Kitap bir üyede mi?
         boolean isBorrowed = borrowingRepository.existsByBook_BookIdAndReturnDateIsNull(id);
 
         if (isBorrowed) {
-            // Hala üyedeyse SİLME, hata ver.
             throw new IllegalStateException("Bu kitap şu an bir üyede! Teslim almadan silemezsiniz.");
         }
 
-        // 2. Eğer kitap üyede değilse (raftaysa), onun eski kayıtlarını temizle
-        // (Veritabanı hatasını önlemek için geçmişi siliyoruz)
+        // Geçmiş kayıtlarını temizle
         List<Borrowing> history = borrowingRepository.findByBook_BookId(id);
         if (!history.isEmpty()) {
             borrowingRepository.deleteAll(history);
         }
 
-        // 3. Geçmiş temizlendiğine göre artık kitabı silebiliriz
         bookRepository.deleteById(id);
     }
 
