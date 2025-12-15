@@ -31,7 +31,7 @@ public class LoanScheduler {
     // @Scheduled: Bu metodun belirli aralıklarla otomatik çalışacağını belirtir.
     // cron = "*/10 * * * * ?" -> "Her 10 saniyede bir çalıştır" demektir.
     // (Gerçek hayatta genelde günde 1 kere çalıştırılır: "0 0 9 * * ?")
-    @Scheduled(cron = "*/10 * * * * ?")
+    @Scheduled(cron = "*/30 * * * * ?")
     public void checkOverdueLoans() {
         System.out.println("Gecikme kontrolü başladı...");
 

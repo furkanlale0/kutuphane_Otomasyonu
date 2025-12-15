@@ -40,7 +40,7 @@ public class LoanService {
         Optional<Book> book = bookRepository.findById(bookId);
 
         if (member.isEmpty() || book.isEmpty()) return "Hata: Üye veya kitap bulunamadı.";
-
+    //stok düşürme burda, trigger yazmadım
         Book b = book.get();
         if (b.getCopies() <= 0) return "Stokta kitap kalmadı!";
 

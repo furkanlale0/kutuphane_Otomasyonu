@@ -26,7 +26,7 @@ public class EmailService {
         SimpleMailMessage message = new SimpleMailMessage();
 
         // Mektubun üzerindeki bilgileri dolduruyoruz:
-        message.setFrom("seninmailin@gmail.com"); // Kimden gidiyor? (Ayarlardaki mail ile aynı olmalı)
+        message.setFrom("furkanlale408@gmail.com"); // Kimden gidiyor?
         message.setTo(to);                        // Kime gidiyor?
         message.setSubject(subject);              // Konusu ne?
         message.setText(body);                    // İçeriği ne?
