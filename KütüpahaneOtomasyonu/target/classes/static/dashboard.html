@@ -11,17 +11,11 @@
         body { background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e); background-size: 400% 400%; animation: gradient 15s ease infinite; font-family: 'Segoe UI', sans-serif; color: #e0e0e0; min-height: 100vh; font-size: 1.1rem; }
         @keyframes gradient { 0% {background-position: 0% 50%} 50% {background-position: 100% 50%} 100% {background-position: 0% 50%} }
         .navbar { background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,0.1); padding: 1rem 0; }
-        .navbar-brand { font-size: 1.5rem; letter-spacing: 1px; }
         .dashboard-card { background: rgba(20, 20, 20, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 2rem; margin-bottom: 25px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
         .stat-number { font-size: 2.5rem; font-weight: bold; color: #fff; }
-        .stat-label { font-size: 1rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px;}
-        .table { --bs-table-bg: transparent; --bs-table-color: #ccc; vertical-align: middle; font-size: 1.05rem; }
-        .table thead th { border-bottom: 2px solid rgba(255,255,255,0.1); color: #888; font-size: 0.9rem; text-transform: uppercase; padding: 15px; }
-        .table td { padding: 15px; }
-        .table-hover tbody tr:hover { color: #fff; background-color: rgba(255,255,255,0.08); cursor: pointer; }
-        .modern-input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 1rem; padding: 10px 15px; }
+        .table { --bs-table-bg: transparent; --bs-table-color: #ccc; vertical-align: middle; }
+        .modern-input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 10px 15px; }
         .modern-input:focus { background: rgba(0,0,0,0.5); border-color: #888; color: #fff; box-shadow: none; }
-        .btn { font-size: 1rem; padding: 8px 20px; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -30,8 +24,9 @@
     <div class="container-fluid px-4">
         <a class="navbar-brand fw-bold" href="#"><i class="bi bi-layers-half text-danger me-2"></i>Nexus</a>
         <div class="d-flex align-items-center gap-3">
-            <button class="btn btn-outline-info rounded-pill" onclick="openProfileModal()"><i class="bi bi-person-circle me-1"></i> Profilim</button>
-            <button class="btn btn-outline-light rounded-pill" onclick="logout()">Çıkış</button>
+            <span id="userInfo" class="badge bg-secondary">Yükleniyor...</span>
+            <button class="btn btn-outline-info rounded-pill" onclick="profilAc()"><i class="bi bi-person-circle me-1"></i> Profilim</button>
+            <button class="btn btn-outline-light rounded-pill" onclick="cikisYap()">Çıkış</button>
         </div>
     </div>
 </nav>
@@ -43,11 +38,11 @@
                 <div class="row">
                     <div class="col-6 border-end border-secondary">
                         <h3 id="totalBooksCount" class="stat-number">-</h3>
-                        <div class="stat-label">Çeşit</div>
+                        <div class="stat-label text-muted">Çeşit</div>
                     </div>
                     <div class="col-6">
                         <h3 id="availableBooksCount" class="stat-number text-success">-</h3>
-                        <div class="stat-label">Stok</div>
+                        <div class="stat-label text-muted">Stok</div>
                     </div>
                 </div>
             </div>
@@ -55,13 +50,13 @@
             <div class="dashboard-card" id="addBookCard" style="display: none;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="text-success mb-0"><i class="bi bi-shield-lock me-2"></i>Admin Paneli</h5>
-                    <button class="btn btn-sm btn-outline-danger" onclick="openFinesModal()">Cezalar</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="cezalarAc()">Cezalar</button>
                 </div>
                 <form id="addBookForm" class="row g-3">
                     <div class="col-12"><input type="text" class="form-control modern-input" id="bookTitle" placeholder="Kitap Adı" required></div>
                     <div class="col-6"><input type="text" class="form-control modern-input" id="authorName" placeholder="Yazar Ad" required></div>
                     <div class="col-6"><input type="text" class="form-control modern-input" id="authorSurname" placeholder="Soyad" required></div>
-                    <div class="col-12"><textarea class="form-control modern-input" id="bookSummary" placeholder="Kısa Özet" rows="3"></textarea></div>
+                    <div class="col-12"><textarea class="form-control modern-input" id="bookSummary" placeholder="Kısa Özet" rows="2"></textarea></div>
                     <div class="col-6"><input type="text" class="form-control modern-input" id="bookIsbn" placeholder="ISBN"></div>
                     <div class="col-3"><input type="number" class="form-control modern-input" id="bookYear" placeholder="Yıl"></div>
                     <div class="col-3"><input type="number" class="form-control modern-input" id="bookCopies" placeholder="Stok" value="1" min="1"></div>
@@ -72,11 +67,11 @@
             <div class="dashboard-card" id="myLoansCard" style="display: none;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="text-warning mb-0">Aktif Ödünçler</h5>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="openHistoryModal()">Geçmiş</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="gecmisAc()">Geçmiş</button>
                 </div>
                 <div class="table-responsive">
-                    <table class="table">
-                        <thead><tr><th>Kitap</th><th>İade</th><th></th></tr></thead>
+                    <table class="table text-white">
+                        <thead><tr><th>Kitap</th><th>İade Tarihi</th><th></th></tr></thead>
                         <tbody id="myLoansBody"></tbody>
                     </table>
                 </div>
@@ -107,10 +102,10 @@
             <div class="modal-body fs-5">
                 <p id="detailSummary" class="text-muted fst-italic mb-4"></p>
                 <div class="row g-3">
-                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>Yazar:</strong> <span id="detailAuthor" class="text-white"></span></div>
-                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>ISBN:</strong> <span id="detailIsbn" class="text-white"></span></div>
-                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>Yıl:</strong> <span id="detailYear" class="text-white"></span></div>
-                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>Stok:</strong> <span id="detailStock" class="text-white"></span></div>
+                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>Yazar:</strong> <span id="detailAuthor"></span></div>
+                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>ISBN:</strong> <span id="detailIsbn"></span></div>
+                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>Yıl:</strong> <span id="detailYear"></span></div>
+                    <div class="col-md-6 p-3 bg-black bg-opacity-25 rounded border border-secondary"><strong>Stok:</strong> <span id="detailStock"></span></div>
                 </div>
             </div>
         </div>
@@ -125,18 +120,13 @@
                 <div class="mb-4"><i class="bi bi-person-circle display-1 text-secondary"></i><h3 id="profName" class="mt-3"></h3><span id="profUser" class="badge bg-secondary fs-6"></span></div>
                 <ul class="list-group list-group-flush fs-5">
                     <li class="list-group-item bg-transparent text-white d-flex justify-content-between"><span>Email:</span> <span id="profEmail">-</span></li>
-
-                    <li id="debtInfoRow" class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center">
+                    <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center">
                         <span>Borç:</span>
-                        <div>
-                            <span class="fw-bold text-danger me-2" id="profDebt">0 TL</span>
-                            <button class="btn btn-sm btn-success" onclick="openPaymentModal()">Ödemeye Geç</button>
-                        </div>
+                        <div><span class="fw-bold text-danger me-2" id="profDebt">0 TL</span><button class="btn btn-sm btn-success" onclick="openPaymentModal()">Öde</button></div>
                     </li>
-
                 </ul>
                 <div id="fineSectionContainer" style="display: none;" class="mt-3">
-                    <button class="btn btn-sm btn-outline-danger w-100 mb-2" onclick="toggleFineDetails()">Ceza Detaylarını Göster</button>
+                    <button class="btn btn-sm btn-outline-danger w-100 mb-2" onclick="cezaDetayAcKapa()">Ceza Detaylarını Göster</button>
                     <div id="fineDetailsList" style="display: none;"><ul id="fineList" class="list-group list-group-flush fs-6 text-start"></ul></div>
                 </div>
             </div>
@@ -148,7 +138,23 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content p-3 bg-dark text-white border-secondary">
             <div class="modal-header border-0"><h4 class="modal-title text-warning">İşlem Geçmişi</h4><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body"><div class="table-responsive"><table class="table table-dark table-hover text-white"><thead><tr class="text-secondary"><th>Kitap</th><th>Alış Tarihi</th><th>İade Tarihi</th><th>Durum</th></tr></thead><tbody id="historyTableBody"></tbody></table></div></div>
+            <div class="modal-body"><table class="table table-dark table-hover text-white"><thead><tr><th>Kitap</th><th>Alış</th><th>İade</th><th>Durum</th></tr></thead><tbody id="historyTableBody"></tbody></table></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content p-4 bg-dark text-white border-success">
+            <div class="modal-header border-0"><h4 class="modal-title text-success"><i class="bi bi-bank me-2"></i>Ödeme</h4><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body text-center">
+                <p class="text-secondary">Lütfen tutarı aşağıdaki IBAN'a gönderip onaylayın.</p>
+                <div class="p-3 mb-3 rounded border border-secondary bg-black bg-opacity-25">
+                    <div class="fs-5 fw-bold mb-1">Furkan Lale</div>
+                    <div class="fs-5 font-monospace text-warning">TR 0800 0100 4027 9539 3324 5003</div>
+                </div>
+                <button class="btn btn-lg btn-success w-100 mt-2" onclick="processPayment()">Ödeme Yaptım</button>
+            </div>
         </div>
     </div>
 </div>
@@ -157,24 +163,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content p-3 bg-dark text-white border-danger">
             <div class="modal-header border-0"><h3 class="modal-title text-danger">Gecikmiş Cezalar</h3><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body"><div class="table-responsive"><table class="table table-dark table-hover text-white align-middle"><thead><tr class="text-secondary small"><th>Üye</th><th>Kitap</th><th>Gecikme</th><th>Durum</th><th>Tutar</th><th>İşlem</th></tr></thead><tbody id="adminFinesBody"></tbody></table></div></div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="paymentModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content p-4 bg-dark text-white border-success">
-            <div class="modal-header border-0"><h4 class="modal-title text-success"><i class="bi bi-bank me-2"></i>Banka Bilgileri</h4><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body text-center">
-                <p class="text-secondary mb-4">Lütfen aşağıdaki hesaba borç tutarını gönderiniz.</p>
-                <div class="p-3 mb-3 rounded border border-secondary bg-black bg-opacity-25">
-                    <h5 class="text-info">Ziraat Bankası</h5><div class="text-muted small mb-2">ALICI ADI SOYADI</div><div class="fs-5 fw-bold mb-3">Furkan Lale</div>
-                    <div class="text-muted small mb-2">IBAN</div><div class="fs-5 font-monospace text-warning" style="letter-spacing: 1px;">TR 0800 0100 4027 9539 3324 5003</div>
-                </div>
-                <div class="alert alert-warning small"><i class="bi bi-info-circle me-1"></i> Açıklama kısmına <strong>Kullanıcı Adınızı</strong> yazmayı unutmayınız.</div>
-                <button class="btn btn-lg btn-success w-100 mt-2" onclick="processPayment()"><i class="bi bi-check-circle-fill me-2"></i>Ödeme Yaptım</button>
-            </div>
+            <div class="modal-body"><table class="table table-dark table-hover text-white"><thead><tr><th>Üye</th><th>Kitap</th><th>Gecikme</th><th>Tutar</th><th>İşlem</th></tr></thead><tbody id="adminFinesBody"></tbody></table></div>
         </div>
     </div>
 </div>
