@@ -6,7 +6,6 @@ import com.example.KutupahaneOtomasyonu.entity.Yonetici;
 import com.example.KutupahaneOtomasyonu.entity.Uye;
 import com.example.KutupahaneOtomasyonu.repository.YoneticiRepository;
 import com.example.KutupahaneOtomasyonu.repository.UyeRepository;
-import com.example.KutupahaneOtomasyonu.entity.Rol;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +17,13 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kimlik Doğrulama (Authentication) işlemlerini yöneten kontrolcüdür.
+ * İki temel görevi vardır:
+ * 1. Sisteme kayıtlı kullanıcıların giriş yapmasını sağlamak ve onlara Token vermek.
+ * 2. Yeni kütüphane üyelerinin sisteme kayıt olmasını sağlamak.
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class GirisIslemleriController {
@@ -29,23 +35,26 @@ public class GirisIslemleriController {
     @Autowired private UyeRepository uyeRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
-    // --- 1. GIRIS YAPMA (LOGIN) ---
+    /*
+     * GİRİŞ YAPMA (LOGIN) METODU
+     * Frontend'den gelen kullanıcı adı ve şifreyi alır.
+     * Bilgiler doğruysa bir JWT Token üretir.
+     * Ayrıca kullanıcının adını, soyadını ve rolünü (Admin/Üye) bulup
+     * token ile birlikte geriye döner.
+     */
     @PostMapping("/giris")
     public ResponseEntity<?> girisYap(@RequestBody GirisIstegi istek) {
         try {
-            // 1. Kullanici adi ve sifreyi kontrol et
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(istek.getGirilenBilgi(), istek.getSifre())
             );
 
-            // 2. Kullaniciyi bul (Isim bilgisini almak icin)
             UserDetails userDetails = kullaniciDetayServisi.loadUserByUsername(istek.getGirilenBilgi());
             String token = jwtServisi.tokenUret(userDetails);
 
-            // 3. Rol ve Isim Bilgisini Bul
             String rol = "UYE";
             Integer id = 0;
-            String adSoyad = "Kullanıcı"; // Varsayılan
+            String adSoyad = "Kullanıcı";
 
             Optional<Yonetici> yonetici = yoneticiRepository.findByKullaniciAdi(istek.getGirilenBilgi());
             if (yonetici.isPresent()) {
@@ -61,7 +70,6 @@ public class GirisIslemleriController {
                 }
             }
 
-            // 4. Cevabi gonder (Token + Rol + ID + AD SOYAD)
             return ResponseEntity.ok(new GirisCevabi(token, rol, id, adSoyad));
 
         } catch (Exception e) {
@@ -69,7 +77,12 @@ public class GirisIslemleriController {
         }
     }
 
-    // --- 2. KAYIT OLMA (REGISTER) ---
+    /*
+     * KAYIT OLMA (REGISTER) METODU
+     * Sadece yeni "Üye" kaydı için kullanılır.
+     * Email adresi daha önce kullanılmış mı diye kontrol eder.
+     * Şifreyi güvenli hale getirip (Hashleyip) veritabanına kaydeder.
+     */
     @PostMapping("/kayit")
     public ResponseEntity<?> kayitOl(@RequestBody UyeKayitIstegi istek) {
         if (uyeRepository.findByEmail(istek.getEmail()).isPresent()) {
@@ -86,7 +99,10 @@ public class GirisIslemleriController {
     }
 }
 
-// --- YARDIMCI SINIFLAR (Dosyanin altina ekli kalsinlar) ---
+/*
+ * DTO (Data Transfer Object) Sınıfları
+ * Frontend ile Backend arasında veri taşıyan basit kutulardır.
+ */
 
 class GirisIstegi {
     private String girilenBilgi;
@@ -97,11 +113,11 @@ class GirisIstegi {
     public void setSifre(String sifre) { this.sifre = sifre; }
 }
 
-class GirisCevabi { // AuthenticationResponse yerine bunu kullaniyoruz
+class GirisCevabi {
     private String token;
     private String rol;
     private Integer id;
-    private String adSoyad; // Yeni ekledigimiz alan
+    private String adSoyad;
 
     public GirisCevabi(String token, String rol, Integer id, String adSoyad) {
         this.token = token;
@@ -121,7 +137,7 @@ class UyeKayitIstegi {
     private String soyad;
     private String email;
     private String sifre;
-    // Getter-Setter
+
     public String getAd() { return ad; }
     public void setAd(String ad) { this.ad = ad; }
     public String getSoyad() { return soyad; }

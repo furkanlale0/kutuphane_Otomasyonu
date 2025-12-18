@@ -41,6 +41,48 @@ async function kitaplariYukle() {
         }
     } catch (e) { console.error(e); }
 }
+// --- KITAP SILME ISLEMI ---
+window.kitapSil = async function(kitapId) {
+    // 1. Emin misin diye sor
+    const result = await Swal.fire({
+        title: 'Emin misiniz?',
+        text: "Bu kitap kalıcı olarak silinecek!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Evet, Sil',
+        cancelButtonText: 'Vazgeç',
+        background: '#1e1e1e',
+        color: '#fff'
+    });
+
+    if (!result.isConfirmed) return;
+
+    const token = localStorage.getItem("jwtToken");
+
+    try {
+        // 2. Backend'e DELETE istegi at
+        const res = await fetch(`${API_URL}/kitaplar/${kitapId}`, {
+            method: "DELETE",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (res.ok) {
+            showToast("Kitap başarıyla silindi!");
+            kitaplariYukle(); // Listeyi yenile ki silinen kitap gitsin
+        } else {
+            // Hata mesajini oku (Orn: Kullanimda oldugu icin silinemedi)
+            const hataMesaji = await res.text();
+            showPopup("Silinemedi", hataMesaji);
+        }
+    } catch (e) {
+        console.error(e);
+        showPopup("Hata", "Sunucu ile bağlantı kurulamadı.");
+    }
+};
 
 function tabloyuCiz(kitaplar) {
     const tbody = document.getElementById("bookListBody");

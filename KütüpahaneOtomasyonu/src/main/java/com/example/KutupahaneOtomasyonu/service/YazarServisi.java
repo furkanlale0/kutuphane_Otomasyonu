@@ -7,10 +7,15 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 
-// @Service: Spring'e "Burası iş mantığı katmanıdır" diyoruz.
-// Controller direkt Repository ile konuşmaz, önce buraya (Müdür'e) gelir.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Yazar işlemleri için İş Mantığı (Business Logic) katmanıdır.
+ * Controller ile Repository arasında köprü görevi görür.
+ * Özellikle Kitap Ekleme işlemi sırasında, yazar kontrolü ve yönetimi için
+ * KitapServisi tarafından sıkça kullanılır.
+ */
 @Service
-public class YazarServisi { // AuthorService -> YazarServisi
+public class YazarServisi {
 
     private final YazarRepository yazarRepository;
 
@@ -19,21 +24,30 @@ public class YazarServisi { // AuthorService -> YazarServisi
         this.yazarRepository = yazarRepository;
     }
 
-    // Tüm yazarları listele
+    /*
+     * TÜM YAZARLARI LİSTELEME
+     * Kitap ekleme formunda veya yazar listesi sayfasında
+     * mevcut yazarları göstermek için kullanılır.
+     */
     public List<Yazar> tumunuGetir() {
         return yazarRepository.findAll();
     }
 
-    // Yeni yazar kaydet
+    /*
+     * YENİ YAZAR KAYDETME
+     * Veritabanına yeni bir yazar ekler.
+     * Genellikle KitapServisi içinden, eğer kitap yeni bir yazara aitse çağrılır.
+     */
     public Yazar kaydet(Yazar yazar) {
-        // İLERİ SEVİYE NOT:
-        // Buraya "Eğer aynı isimde yazar varsa kaydetme, hata fırlat" gibi if-else kodları yazılabilir.
-        // Şimdilik direkt kaydediyoruz.
         return yazarRepository.save(yazar);
     }
 
-    // Repository'e eklediğimiz özel arama metodunu burada dış dünyaya açıyoruz.
-    // Kitap eklerken "Bu yazar sistemde var mı?" diye sormak için kullanacağız.
+    /*
+     * İSİM VE SOYİSİM İLE ARAMA
+     * Mükerrer kayıt kontrolü için kritik öneme sahiptir.
+     * Kitap eklenirken, girilen yazar isminin sistemde olup olmadığını
+     * bu metod sayesinde kontrol ederiz.
+     */
     public Optional<Yazar> adSoyadIleBul(String ad, String soyad) {
         return yazarRepository.findByAdAndSoyad(ad, soyad);
     }

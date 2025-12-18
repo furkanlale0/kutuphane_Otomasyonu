@@ -5,43 +5,51 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-// @Service: Spring'e "Bu sinif bir is mantigi yurutur (Postacidir), bunu hafizaya al" diyoruz.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * E-posta gönderim işlemlerini yöneten servis sınıfıdır.
+ * Spring Boot'un 'JavaMailSender' arayüzünü kullanarak, SMTP protokolü üzerinden
+ * üyelere otomatik bildirim (gecikme uyarısı vb.) gönderilmesini sağlar.
+ */
 @Service
-public class EpostaServisi { // EmailService -> EpostaServisi
+public class EpostaServisi {
 
-    // Spring Boot'un hazir e-posta gonderme araci.
-    // Tipki gercek hayattaki PTT veya Kargo sirketi gibi, altyapiyi bu saglar.
-    // (Bunun calismasi icin application.properties dosyasinda Gmail ayarlari yapilmalidir).
+    /*
+     * JavaMailSender
+     * Spring Framework'ün sağladığı e-posta gönderim aracıdır.
+     * 'application.properties' dosyasındaki Gmail yapılandırma ayarlarını
+     * (host, port, username, password) otomatik olarak kullanır.
+     */
     @Autowired
     private JavaMailSender mailSender;
 
     /**
-     * Basit bir e-posta gonderme metodu.
-     * Scheduler (Zamanlayici) sinifi buradan cagirip mail attirir.
+     * E-POSTA GÖNDERME METODU
+     * Belirtilen alıcıya, konu ve içerik bilgileriyle basit metin formatında e-posta gönderir.
+     * Genellikle 'GecikmeTakipZamanlayicisi' tarafından tetiklenir.
      *
-     * @param alici   Kime gonderilecek? (Uyenin e-posta adresi)
-     * @param konu    E-postanin konusu (Baslik)
-     * @param icerik  E-postanin icerigi (Mesaj metni)
+     * @param alici   Alıcının e-posta adresi
+     * @param konu    E-postanın başlığı
+     * @param icerik  E-postanın gövde metni
      */
     public void mailGonder(String alici, String konu, String icerik) {
-        // 1. Yeni bir bos mektup kagidi (zarf) olusturuyoruz.
+        // 1. E-posta nesnesinin (SimpleMailMessage) oluşturulması
         SimpleMailMessage mesaj = new SimpleMailMessage();
 
-        // 2. Mektubun uzerindeki bilgileri dolduruyoruz:
-        // DIKKAT: Buradaki mail adresi, application.properties ayarlarindaki mail ile ayni olmali!
-        mesaj.setFrom("furkanlale408@gmail.com"); // Kimden gidiyor?
+        // 2. Gönderim detaylarının ayarlanması
+        // NOT: 'setFrom' kısmındaki adres, application.properties ayarlarındaki ile aynı olmalıdır.
+        mesaj.setFrom("furkanlale408@gmail.com");
+        mesaj.setTo(alici);
+        mesaj.setSubject(konu);
+        mesaj.setText(icerik);
 
-        mesaj.setTo(alici);      // Kime gidiyor?
-        mesaj.setSubject(konu);  // Konusu ne?
-        mesaj.setText(icerik);   // Icerigi ne? ("Kitabiniz gecikti getiriniz" vb.)
-
-        // 3. Ve postaciyi cagirip "Bunu gonder!" diyoruz.
+        // 3. Gönderim işleminin gerçekleştirilmesi
         try {
             mailSender.send(mesaj);
-            // Konsola da bilgi verelim ki calistigini gorelim.
-            System.out.println("📨 E-posta basariyla gonderildi: " + alici);
+            System.out.println("✅ E-posta başarıyla gönderildi: " + alici);
         } catch (Exception e) {
-            System.err.println("❌ E-posta gonderilirken hata olustu: " + e.getMessage());
+            // Ağ hatası veya hatalı e-posta durumunda sistemin çökmemesi için hata yakalanır.
+            System.err.println("❌ E-posta gönderim hatası: " + e.getMessage());
         }
     }
 }

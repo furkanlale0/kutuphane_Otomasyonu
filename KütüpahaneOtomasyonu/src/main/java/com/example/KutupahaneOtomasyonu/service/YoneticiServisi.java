@@ -7,9 +7,14 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
-// @Service: Spring'e "Bu sinif is kurallarini yonetir, Controller ile Repository arasindaki koprudur" diyoruz.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Yönetici (Admin) işlemleri için İş Mantığı (Business Logic) katmanıdır.
+ * Veritabanı ile güvenlik katmanı arasında köprü görevi görür.
+ * Özellikle giriş (Login) işlemleri sırasında, yöneticinin varlığını doğrulamak için kullanılır.
+ */
 @Service
-public class YoneticiServisi { // AdminService -> YoneticiServisi
+public class YoneticiServisi {
 
     private final YoneticiRepository yoneticiRepository;
 
@@ -18,8 +23,12 @@ public class YoneticiServisi { // AdminService -> YoneticiServisi
         this.yoneticiRepository = yoneticiRepository;
     }
 
-    // Veritabanindan yoneticiyi getiren metot (Repository'i sarmalar).
-    // DIKKAT: Repository'deki metodumuzun adi artik "findByKullaniciAdi" oldugu icin burayi da guncelledik.
+    /*
+     * KULLANICI ADI İLE YÖNETİCİ BULMA
+     * Veritabanında belirtilen kullanıcı adına sahip bir yöneticiyi arar.
+     * Genellikle 'KullaniciDetayServisi' tarafından, sisteme girmeye çalışan kişinin
+     * bilgilerini doğrulamak amacıyla çağrılır.
+     */
     public Optional<Yonetici> kullaniciAdiIleGetir(String kullaniciAdi) {
         return yoneticiRepository.findByKullaniciAdi(kullaniciAdi);
     }

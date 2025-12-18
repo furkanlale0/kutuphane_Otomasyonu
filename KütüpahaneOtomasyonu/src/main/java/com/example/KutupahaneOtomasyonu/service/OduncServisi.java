@@ -9,6 +9,12 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kütüphanedeki "Hareket" mekanizmasını yöneten ana servistir.
+ * Kitap verme, iade alma, ceza hesaplama ve ödeme onayı gibi
+ * tüm operasyonel iş kuralları (Business Logic) burada işlenir.
+ */
 @Service
 public class OduncServisi {
 
@@ -16,26 +22,45 @@ public class OduncServisi {
     @Autowired private KitapRepository kitapRepository;
     @Autowired private UyeRepository uyeRepository;
 
-    // --- 1. KITAP ODUNC VER (Demo: 1 Dakika Süre) ---
+    /*
+     * 1. KİTAP ÖDÜNÇ VERME İŞLEMİ
+     * Üyenin kitabı alıp alamayacağını kontrol eder ve işlemi başlatır.
+     *
+     * KONTROLLER:
+     * - Kitap ve Üye var mı?
+     * - Kitabın stoğu var mı?
+     * - Üyenin ödenmemiş eski bir borcu var mı? (Varsa engeller)
+     */
     public String kitapOduncVer(Integer uyeId, Integer kitapId) {
         Optional<Kitap> k = kitapRepository.findById(kitapId);
         Optional<Uye> u = uyeRepository.findById(uyeId);
-        if (k.isEmpty() || u.isEmpty()) return "Hata";
+
+        if (k.isEmpty() || u.isEmpty()) return "Hata: Kitap veya Üye bulunamadı.";
 
         Kitap kitap = k.get();
         if (kitap.getStokSayisi() <= 0) return "Stok Yok";
 
-        // Aktif borcu (ödenmemiş veya onay bekleyen) var mı?
+        // BORÇ KONTROLÜ: "Borcu olan yeni kredi çekemez" mantığı.
         boolean borcluMu = oduncRepository.findAll().stream()
                 .anyMatch(o -> o.getUye().getUyeId().equals(uyeId) &&
                         ( "ODENMEDI".equals(o.getOdemeDurumu()) || "ONAY_BEKLIYOR".equals(o.getOdemeDurumu()) ));
+
         if(borcluMu) return "Ödenmemiş cezanız varken yeni kitap alamazsınız!";
 
+        // İşlemin Başlatılması
         OduncIslemi islem = new OduncIslemi();
         islem.setUye(u.get());
         islem.setKitap(kitap);
         islem.setAlisTarihi(LocalDateTime.now());
-        islem.setSonTeslimTarihi(LocalDateTime.now().plusMinutes(1)); // 1 Dakika Süre
+
+        /*
+         * DEMO AYARI:
+         * Sunum sırasında gecikme senaryosunu hemen gösterebilmek için
+         * teslim süresi 1 dakika olarak ayarlanmıştır.
+         * (Gerçek hayatta burası .plusDays(15) olurdu).
+         */
+        islem.setSonTeslimTarihi(LocalDateTime.now().plusMinutes(1));
+
         islem.setDurum(OduncDurumu.ODUNC_ALINDI);
         islem.setOdemeDurumu("YOK");
 
@@ -43,11 +68,17 @@ public class OduncServisi {
         return "Islem Basarili";
     }
 
-    // --- 2. KITAP IADE AL (Cezayı Hesapla ve Kaydet) ---
+    /*
+     * 2. KİTAP İADE ALMA İŞLEMİ
+     * Kitabı geri alır, tarihi kontrol eder ve gerekirse ceza keser.
+     */
     public String kitapIadeAl(Integer uyeId, Integer kitapId) {
+        // İlgili üyenin elindeki ilgili kitabı buluyoruz.
         List<OduncIslemi> kayitlar = oduncRepository.findAll();
         OduncIslemi islem = kayitlar.stream()
-                .filter(o -> o.getUye().getUyeId().equals(uyeId) && o.getKitap().getKitapId().equals(kitapId) && o.getDurum() == OduncDurumu.ODUNC_ALINDI)
+                .filter(o -> o.getUye().getUyeId().equals(uyeId) &&
+                        o.getKitap().getKitapId().equals(kitapId) &&
+                        o.getDurum() == OduncDurumu.ODUNC_ALINDI)
                 .findFirst().orElse(null);
 
         if (islem == null) return "Kayit Yok";
@@ -56,28 +87,35 @@ public class OduncServisi {
         islem.setIadeTarihi(bugun);
         islem.setDurum(OduncDurumu.IADE_EDILDI);
 
-        // CEZA HESAPLAMA (Demo: Dakikası 5 TL)
+        /*
+         * CEZA HESAPLAMA ALGORİTMASI (Demo Modu)
+         * Geciken her dakika için 5 TL ceza uygulanır.
+         */
         if (islem.getSonTeslimTarihi().isBefore(bugun)) {
             long gecikenDakika = ChronoUnit.MINUTES.between(islem.getSonTeslimTarihi(), bugun);
+
             if (gecikenDakika > 0) {
                 double ceza = gecikenDakika * 5.0;
                 islem.setCezaMiktari(ceza);
-                islem.setOdemeDurumu("ODENMEDI"); // Ceza var ve henüz ödenmedi
+                islem.setOdemeDurumu("ODENMEDI"); // Borç oluştu
             }
         }
         oduncRepository.save(islem);
         return "Islem Basarili";
     }
 
-    // --- 3. UYE: ÖDEME BILDIRIMI YAP ("Ödedim" butonu) ---
+    /*
+     * 3. ÜYE ÖDEME BİLDİRİMİ
+     * Üye borcunu ödediğini beyan eder ("Ödedim" butonu).
+     * Borcu silmez, sadece durumu "ONAY_BEKLIYOR" yapar.
+     */
     public boolean odemeBildirimiYap(Integer uyeId) {
         List<OduncIslemi> hepsi = oduncRepository.findAll();
         boolean islemYapildi = false;
 
         for (OduncIslemi o : hepsi) {
-            // Sadece bu üyenin ÖDENMEMİŞ cezalarını bul
             if (o.getUye().getUyeId().equals(uyeId) && "ODENMEDI".equals(o.getOdemeDurumu())) {
-                o.setOdemeDurumu("ONAY_BEKLIYOR"); // Durumu değiştir
+                o.setOdemeDurumu("ONAY_BEKLIYOR");
                 oduncRepository.save(o);
                 islemYapildi = true;
             }
@@ -85,12 +123,15 @@ public class OduncServisi {
         return islemYapildi;
     }
 
-    // --- 4. ADMIN: ÖDEMEYI ONAYLA ("Tahsil Et" butonu) ---
-    public boolean odemeyiOnayla(Integer oduncId) { // uyeId yerine oduncId ile işlem yapıyoruz ki spesifik olsun
+    /*
+     * 4. ADMIN ÖDEME ONAYI
+     * Yönetici paranın hesaba geçtiğini onaylar ("Tahsil Et" butonu).
+     * Borcu kalıcı olarak kapatır ("ODENDI").
+     */
+    public boolean odemeyiOnayla(Integer oduncId) {
         Optional<OduncIslemi> islemOp = oduncRepository.findById(oduncId);
         if(islemOp.isPresent()) {
             OduncIslemi islem = islemOp.get();
-            // Onay bekleyen veya ödenmemiş cezayı kapat
             islem.setOdemeDurumu("ODENDI");
             oduncRepository.save(islem);
             return true;
@@ -98,28 +139,32 @@ public class OduncServisi {
         return false;
     }
 
-    // --- YARDIMCI METOD: ANLIK CEZA HESAPLA ---
+    /*
+     * YARDIMCI METOD: ANLIK CEZA HESAPLAYICI
+     * Veritabanına kaydetmeden, o anki duruma göre ekranda görünecek cezayı hesaplar.
+     * İki senaryoyu yönetir:
+     * A) Aktif Gecikme: Kitap hala üyede, ceza her dakika artıyor.
+     * B) Kesinleşmiş Ceza: Kitap iade edilmiş, ceza tutarı sabitlenmiş.
+     */
     private Map<String, Object> cezaVerisiHazirla(OduncIslemi o) {
         LocalDateTime bugun = LocalDateTime.now();
         double hesaplananCeza = 0;
         long gecikenSure = 0;
-        String durumMetni = o.getOdemeDurumu(); // Varsayılan durum
+        String durumMetni = o.getOdemeDurumu();
 
-        // A) Kitap hala üyede ve süresi geçmiş (AKTİF CEZA)
+        // Senaryo A: Aktif Gecikme
         if (o.getDurum() == OduncDurumu.ODUNC_ALINDI && o.getSonTeslimTarihi().isBefore(bugun)) {
             gecikenSure = ChronoUnit.MINUTES.between(o.getSonTeslimTarihi(), bugun);
-            hesaplananCeza = gecikenSure * 5.0; // Dakika başı 5 TL
-            durumMetni = "AKTIF_GECIKME"; // Özel durum kodu
+            hesaplananCeza = gecikenSure * 5.0;
+            durumMetni = "AKTIF_GECIKME";
         }
-        // B) Kitap iade edilmiş ve cezası var (KESİNLEŞMİŞ CEZA)
+        // Senaryo B: Kesinleşmiş Ceza
         else if (o.getCezaMiktari() > 0) {
             hesaplananCeza = o.getCezaMiktari();
-            // Gecikme süresi iade tarihine göre hesaplanmış olmalı ama burada göstermelik 0 geçebiliriz
-            // veya veritabanında tutuyorsak onu çekeriz. Şimdilik admin görsün diye:
+            // Göstermelik gecikme süresi hesaplama (Tutar / 5)
             gecikenSure = (long) (hesaplananCeza / 5.0);
         }
 
-        // Eğer ceza yoksa boş dön
         if (hesaplananCeza <= 0) return null;
 
         Map<String, Object> m = new HashMap<>();
@@ -128,19 +173,19 @@ public class OduncServisi {
         m.put("kitap", o.getKitap().getKitapAdi());
         m.put("gecikme", gecikenSure + " Dakika");
         m.put("tutar", hesaplananCeza);
-        m.put("durum", durumMetni); // AKTIF_GECIKME, ODENMEDI, ONAY_BEKLIYOR, ODENDI
+        m.put("durum", durumMetni);
         return m;
     }
 
-    // --- 5. ADMIN TABLOSU İÇİN CEZALAR (GÜNCELLENDİ) ---
+    // --- RAPORLAMA VE LİSTELEME METODLARI ---
+
+    // Admin Paneli: Tüm Cezalar
     public List<Map<String, Object>> tumCezalariGetir() {
         List<Map<String, Object>> liste = new ArrayList<>();
         List<OduncIslemi> hepsi = oduncRepository.findAll();
 
         for (OduncIslemi o : hepsi) {
-            // Sadece (Aktif Gecikme) veya (Kesinleşmiş Borç) veya (Onay Bekleyen) olanları getir
-            // "ODENDI" olanları admin listesinde kalabalık yapmasın diye gizleyebiliriz veya gösterebiliriz.
-            // Şimdilik sadece sorunu olanları gösterelim:
+            // "ODENDI" durumundakiler listede kalabalık yapmasın diye gizleniyor.
             Map<String, Object> veri = cezaVerisiHazirla(o);
             if (veri != null && !o.getOdemeDurumu().equals("ODENDI")) {
                 liste.add(veri);
@@ -149,7 +194,7 @@ public class OduncServisi {
         return liste;
     }
 
-    // --- 6. UYE PROFILI İÇİN CEZA DETAYLARI (GÜNCELLENDİ) ---
+    // Üye Paneli: Kendi Cezaları
     public List<Map<String, Object>> uyeCezaDetaylari(Integer uyeId) {
         List<Map<String, Object>> liste = new ArrayList<>();
         List<OduncIslemi> hepsi = oduncRepository.findAll();
@@ -165,9 +210,8 @@ public class OduncServisi {
         return liste;
     }
 
-    // --- Diğer metodlar (aktifOduncler vb.) aynı kalabilir ---
+    // Üye Paneli: Aktif (Okumakta olduğu) Kitaplar
     public List<Map<String, Object>> aktifOduncleriGetir(Integer uyeId) {
-        // ... (Eski kodun aynısı)
         List<Map<String, Object>> liste = new ArrayList<>();
         for (OduncIslemi o : oduncRepository.findAll()) {
             if (o.getUye().getUyeId().equals(uyeId) && o.getDurum() == OduncDurumu.ODUNC_ALINDI) {
@@ -181,8 +225,8 @@ public class OduncServisi {
         return liste;
     }
 
+    // Üye Paneli: Geçmiş İşlemler
     public List<Map<String, Object>> uyeGecmisiniGetir(Integer uyeId) {
-        // ... (Eski kodun aynısı)
         List<Map<String, Object>> liste = new ArrayList<>();
         for (OduncIslemi o : oduncRepository.findAll()) {
             if (o.getUye().getUyeId().equals(uyeId)) {

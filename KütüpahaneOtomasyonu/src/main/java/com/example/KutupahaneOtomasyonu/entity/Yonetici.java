@@ -8,29 +8,32 @@ import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// @Entity: Bu sinifin siradan bir kod degil, veritabanindaki bir TABLO oldugunu belirtir.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kütüphane yönetimini sağlayan idari personeli temsil eder ("Yoneticiler" tablosu).
+ * Sistemdeki yetki seviyeleri (Admin, Personel vb.) bu sınıf üzerinden yönetilir.
+ * Kitap ekleme, üye silme gibi kritik işlemleri yapacak kişiler burada tutulur.
+ */
 @Entity
-// @Table: Veritabaninda "Yoneticiler" tablosuna karsilik gelir.
 @Table(name = "Yoneticiler")
-// @Data: Lombok kutuphanesi; Getter, Setter ve toString metodlarini bizim yerimize otomatik yazar.
 @Data
-@NoArgsConstructor // Bos constructor (Hibernate veri cekerken nesne olusturmak icin kullanir).
-@AllArgsConstructor // Dolu constructor (Testlerde veya elle nesne olustururken isimize yarar).
-public class Yonetici { // Admin -> Yonetici
+@NoArgsConstructor
+@AllArgsConstructor
+public class Yonetici {
 
-    // @Id: Tablonun benzersiz kimlik numarasidir (Primary Key).
-    // @GeneratedValue: Biz elle 1,2 diye sayi vermeyiz; veritabani otomatik sirayla arttirir.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "yonetici_id")
     private Integer yoneticiId;
 
-    // nullable=false: Bu alan bos birakilamaz.
-    // unique=true: Ayni kullanici adiyla ikinci bir kisi kaydolamaz (Benzersiz olmalidir).
+    /*
+     * GİRİŞ BİLGİLERİ
+     * Kullanıcı adı benzersiz (unique) olmalıdır.
+     * Şifreler veritabanında asla açık metin olarak değil, şifrelenmiş (Hash) halde tutulur.
+     */
     @Column(name = "kullanici_adi", nullable = false, unique = true)
     private String kullaniciAdi;
 
-    // Sifre burada guvenlik geregi "1234" gibi acik degil, kriptolanmis ($2a$...) haliyle tutulur.
     @Column(nullable = false)
     private String sifre;
 
@@ -40,28 +43,29 @@ public class Yonetici { // Admin -> Yonetici
 
     private String email;
 
-    // --- ROL YONETIMI ---
-    // @Enumerated: Veritabanina rolu 0,1 gibi sayiyla degil; "SUPERADMIN", "PERSONEL" diye yaziyla kaydeder.
-    // Boylece veritabanina bakinca kimin ne yetkisi oldugunu rahatca anlariz.
+    /*
+     * ROL YÖNETİMİ (YETKİLENDİRME)
+     * Yöneticinin sistemdeki yetki seviyesini belirler.
+     * EnumType.STRING: Veritabanında okunabilirliği artırmak için sayı yerine
+     * metin olarak ("ADMIN", "PERSONEL") kaydedilir.
+     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Rol rol; // Role -> Rol (Enum sinifi)
+    private Rol rol;
 
-    // Kaydin ne zaman olusturuldugunu tutar.
     @Column(name = "olusturulma_tarihi")
     private LocalDateTime olusturulmaTarihi;
 
-    // --- ILISKI: BIR YONETICI -> COK KITAP ---
-    // Bir yonetici sisteme birden fazla kitap eklemis olabilir.
-
-    // mappedBy: Iliskinin yoneticisi biz degiliz, Kitap sinifindaki "ekleyenYonetici" alanidir.
-    // fetch=LAZY: Yoneticiyi cektigimizde, ekledigi 1000 kitabi hemen hafizaya yukleme.
-    // Sadece biz ozel olarak "getEkledigiKitaplar()" dersek getir (Performans ayari).
+    /*
+     * EKLEDİĞİ KİTAPLAR İLİŞKİSİ (One-to-Many)
+     * Bir yönetici sisteme birden fazla kitap ekleyebilir.
+     *
+     * FetchType.LAZY: Performans optimizasyonudur. Yönetici verisi çekildiğinde,
+     * eklediği binlerce kitap listesi belleğe yüklenmez.
+     *
+     * @JsonIgnore: API yanıtı oluşturulurken sonsuz döngüyü (Yönetici -> Kitap -> Yönetici...) engeller.
+     */
     @OneToMany(mappedBy = "ekleyenYonetici", fetch = FetchType.LAZY)
-
-    // @JsonIgnore: SONSUZ DONGU ENGELI.
-    // Yonetici verisini JSON olarak gonderirken kitap listesini dahil etme.
-    // Yoksa: Yonetici -> Kitap -> Yonetici -> Kitap... seklinde sonsuz dongu olur ve program coker.
     @JsonIgnore
     private List<Kitap> ekledigiKitaplar;
 }

@@ -5,33 +5,28 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 
-// @Repository: Spring'e "Bu dosya Kitap tablosuyla konusan yetkili servistir" diyoruz.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kitap varlığı (Entity) için veri erişim katmanıdır.
+ * Spring Data JPA teknolojisini kullanarak, "Kitaplar" tablosu üzerinde
+ * CRUD (Ekleme, Okuma, Güncelleme, Silme) işlemlerini otomatikleştirir.
+ */
 @Repository
-// JpaRepository<Kitap, Integer>:
-// "Ben Kitap tablosunu yonetiyorum ve ID'si Integer turunde."
-// Bunu dedigimiz an, Java bize 'save', 'delete', 'findAll' gibi temel metodlari hediye eder.
-public interface KitapRepository extends JpaRepository<Kitap, Integer> { // BookRepository -> KitapRepository
+public interface KitapRepository extends JpaRepository<Kitap, Integer> {
 
-    // --- SIHIRLI ARAMA METODU 1 ---
-    // findByKitapAdiContainingIgnoreCase:
-    // DIKKAT: Entity icindeki degisken adi "kitapAdi" oldugu icin metod ismi de boyle baslamak zorundadir.
+    /*
+     * DİNAMİK ARAMA METODU (Derived Query Method)
+     * Kullanıcının girdiği kelimeye göre kitap adında arama yapar.
+     * SQL Karşılığı: SELECT * FROM Kitaplar WHERE LOWER(kitap_adi) LIKE LOWER('%parametre%')
+     * Özellik: Büyük/Küçük harf duyarlılığı yoktur (Case Insensitive) ve kısmi eşleşmeyi kabul eder.
+     */
+    List<Kitap> findByKitapAdiContainingIgnoreCase(String kitapAdi);
 
-    // Bu metod ismi Spring tarafindan parcalanir ve su anlama gelir:
-    // 1. findByKitapAdi: Kitap Adina gore ara.
-    // 2. Containing: Tam eslesme sart degil, icinde geciyorsa kabul et (SQL'deki LIKE %kelime% komutu).
-    // 3. IgnoreCase: Buyuk/Kucuk harf fark etmez (JAVA = java = Java).
-
-    // Yani kullanici "potter" yazsa bile "Harry Potter" kitabini bulur.
-    List<Kitap> findByKitapAdiContainingIgnoreCase(String kitapAdi); // findByTitle... -> findByKitapAdi...
-
-    // --- SIHIRLI ARAMA METODU 2 ---
-    // findByStokSayisiGreaterThan:
-    // DIKKAT: Entity icindeki degisken adi "stokSayisi" oldugu icin metod ismi de boyle olmak zorundadir.
-
-    // "Stok sayisi, verilen sayidan BUYUK olanlari getir."
-    // SQL Karsiligi: SELECT * FROM Kitaplar WHERE stok_sayisi > ?
-
-    // Biz bunu genelde "findByStokSayisiGreaterThan(0)" diyerek,
-    // sadece stokta KALMIS (bitmemis) kitaplari listelemek icin kullaniriz.
-    List<Kitap> findByStokSayisiGreaterThan(int stokSayisi); // findByCopies... -> findByStokSayisi...
+    /*
+     * STOK KONTROL SORGUSU
+     * Stok sayısı belirtilen değerden büyük olan kitapları listeler.
+     * Genellikle parametre olarak '0' verilerek, sadece stoğu tükenmemiş (mevcut)
+     * kitapları listelemek için kullanılır.
+     */
+    List<Kitap> findByStokSayisiGreaterThan(int stokSayisi);
 }

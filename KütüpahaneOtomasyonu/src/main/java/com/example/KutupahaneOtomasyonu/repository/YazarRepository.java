@@ -5,23 +5,23 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
-// @Repository: Spring'e diyoruz ki: "Bu dosya Yazar tablosuyla konusan depo sorumlusudur."
+/*
+ * BU SINIF NE İŞE YARAR?
+ * "Yazarlar" tablosu için veri erişim katmanıdır.
+ * Yazar ekleme, silme ve isim-soyisim kombinasyonuna göre arama yapma
+ * işlemlerini yönetir.
+ */
 @Repository
-// JpaRepository<Yazar, Integer>:
-// "Ben Yazar tablosunu yonetiyorum ve bu tablonun ID'si Integer (Sayi) turunde."
-// Bunu dedigimiz an; kaydetme, silme, hepsini getirme gibi ozellikleri otomatik kazaniriz.
-public interface YazarRepository extends JpaRepository<Yazar, Integer> { // AuthorRepository -> YazarRepository
+public interface YazarRepository extends JpaRepository<Yazar, Integer> {
 
-    // --- OZEL ARAMA METODU (SIHIRLI KISIM) ---
-    // Spring Data JPA'nin en buyuk sihri buradadir: "Method Name Strategy" (Isimden Sorgu Turetme).
-
-    // DIKKAT: Yazar entity'sinde degisken isimlerini "ad" ve "soyad" yapmistik.
-    // O yuzden metod adini da ona uydurmak ZORUNDAYIZ: "findByAdAndSoyad".
-
-    // Spring arka planda su SQL sorgusunu yazar ve calistirir:
-    // "SELECT * FROM Yazarlar WHERE ad = ? AND soyad = ?"
-
-    // Optional<Yazar>: Sonuc bos donebilir (Belki boyle bir yazar yoktur).
-    // O yuzden sonucu Optional kutusu icinde doneriz ki "Null Hatasi" almayalim.
+    /*
+     * İSİM VE SOYİSİM İLE YAZAR BULMA
+     * Veritabanında aynı isim ve soyisimde bir yazarın kayıtlı olup olmadığını
+     * kontrol etmek için kullanılır.
+     * Genellikle kitap ekleme işleminden önce, yazarın sistemde var olup olmadığı
+     * bu metod ile teyit edilir (Mükerrer kayıt önleme).
+     *
+     * SQL Karşılığı: SELECT * FROM Yazarlar WHERE ad = ? AND soyad = ?
+     */
     Optional<Yazar> findByAdAndSoyad(String ad, String soyad);
 }

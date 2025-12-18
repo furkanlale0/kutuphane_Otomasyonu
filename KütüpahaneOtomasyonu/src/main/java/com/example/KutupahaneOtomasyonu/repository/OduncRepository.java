@@ -5,53 +5,60 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 
-// @Repository: Spring'e "Bu dosya OduncIslemi tablosunu (OduncIslemleri) yoneten depodur" diyoruz.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Ödünç alma işlemlerini yöneten veri erişim katmanıdır.
+ * "OduncIslemleri" tablosu üzerinde çalışır.
+ * Aktif ödünçleri, gecikmiş kitapları ve kullanıcı geçmişini sorgulamak için kullanılır.
+ */
 @Repository
-// JpaRepository<OduncIslemi, Integer>:
-// "Ben OduncIslemi tablosunu yonetiyorum ve ID'si Integer turunde."
-public interface OduncRepository extends JpaRepository<OduncIslemi, Integer> { // BorrowingRepository -> OduncRepository
+public interface OduncRepository extends JpaRepository<OduncIslemi, Integer> {
 
-    // --- AKTIF ODUNCLERI BUL (Uye Bazli) ---
-    // Entity degiskenleri: Uye (uye) -> UyeId (uyeId) ve IadeTarihi (iadeTarihi)
-
-    // Meali: "Bu uyenin aldigi ama henuz geri getirmedigi (iade tarihi NULL olan) kitaplari listele."
-    // SQL: SELECT * FROM OduncIslemleri WHERE uye_id = ? AND iade_tarihi IS NULL
+    /*
+     * ÜYENİN ELİNDEKİ KİTAPLAR
+     * Bir üyenin aldığı ancak henüz iade etmediği (iade tarihi NULL olan)
+     * tüm aktif kitapları listeler.
+     */
     List<OduncIslemi> findByUye_UyeIdAndIadeTarihiIsNull(Integer uyeId);
-    // Eski adi: findByMember_MemberIdAndReturnDateIsNull
 
-    // --- SPESIFIK KITAP KONTROLU (Hata Onleyici) ---
-    // Meali: "Bu uye, su an bu kitabi elinde tutuyor mu?"
-    // List donuyoruz ki veritabaninda yanlislikla cift kayit varsa sistem patlamasin.
+    /*
+     * İADE KONTROL SORGUSU
+     * İade işlemi yapılırken, sistemin doğru kaydı bulmasını sağlar.
+     * "Bu üyenin elinde şu an bu kitap var mı?" sorusunun cevabıdır.
+     */
     List<OduncIslemi> findByUye_UyeIdAndKitap_KitapIdAndIadeTarihiIsNull(Integer uyeId, Integer kitapId);
-    // Eski adi: findByMember_MemberIdAndBook_BookIdAndReturnDateIsNull
 
-    // --- KITAP AKTIF MI? ---
-    // Meali: "Bu kitap ID'sine sahip olup da henuz iade edilmemis bir kayit var mi?"
-    // Kitap silinirken ise yarar. Eger true donerse, kitap birinin elindedir ve silinemez.
+    /*
+     * KİTAP SİLME GÜVENLİĞİ
+     * Yönetici bir kitabı silmeye çalıştığında bu metod devreye girer.
+     * Eğer kitap şu an bir üyedeyse (iade tarihi NULL ise) silme işlemini engellemek için true döner.
+     */
     boolean existsByKitap_KitapIdAndIadeTarihiIsNull(Integer kitapId);
-    // Eski adi: existsByBook_BookIdAndReturnDateIsNull
 
-    // --- KITAP GECMISI ---
-    // Meali: "Bu kitap bugune kadar kimler tarafindan ne zaman alinmis? Hepsini getir."
+    /*
+     * KİTAP HAREKET GEÇMİŞİ
+     * Bir kitabın bugüne kadar kimler tarafından ne zaman alındığının dökümünü verir.
+     */
     List<OduncIslemi> findByKitap_KitapId(Integer kitapId);
-    // Eski adi: findByBook_BookId
 
-    // --- UYE GECMISI ---
-    // Meali: "Bu uye bugune kadar hangi kitaplari almis/vermis? Hepsini getir."
-    // (Profil sayfasindaki 'Gecmis Islemler' tablosu icin kullanilir).
+    /*
+     * ÜYE İŞLEM GEÇMİŞİ
+     * Bir üyenin bugüne kadar yaptığı tüm alış-veriş işlemlerini listeler.
+     * Profil sayfasındaki "Geçmiş İşlemlerim" tablosu için kullanılır.
+     */
     List<OduncIslemi> findByUye_UyeId(Integer uyeId);
-    // Eski adi: findByMember_MemberId
 
-    // --- AYNI KITABI TEKRAR ALMA KONTROLU ---
-    // Meali: "Bu uyenin elinde bu kitap zaten var mi?" (True/False)
-    // Bir uye ayni kitabi iade etmeden ikinci kez alamasin diye bu kontrolu yapariz.
+    /*
+     * MÜKERRER İŞLEM KONTROLÜ
+     * Bir üyenin aynı kitabı iade etmeden ikinci kez almasını engeller.
+     * Mantık hatasını ve stok tutarsızlığını önler.
+     */
     boolean existsByUye_UyeIdAndKitap_KitapIdAndIadeTarihiIsNull(Integer uyeId, Integer kitapId);
-    // Eski adi: existsByMember_MemberIdAndBook_BookIdAndReturnDateIsNull
 
-    // --- GECIKMIS KITAPLARI BULMA (Otomatik Mail Icin) ---
-    // Entity degiskenleri: SonTeslimTarihi (sonTeslimTarihi) ve IadeTarihi (iadeTarihi)
-
-    // Meali: "Teslim tarihi su andan eski olan (Before) ama hala geri gelmemis (IsNull) kitaplari bul."
+    /*
+     * GECİKMİŞ KİTAPLARI TESPİT ETME
+     * Teslim tarihi geçmiş (Before) ancak hala iade edilmemiş (IsNull) kayıtları bulur.
+     * Ceza hesaplama ve bildirim gönderme mekanizması bu sorguyu kullanır.
+     */
     List<OduncIslemi> findBySonTeslimTarihiBeforeAndIadeTarihiIsNull(java.time.LocalDateTime tarih);
-    // Eski adi: findByDueDateBeforeAndReturnDateIsNull
 }

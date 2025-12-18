@@ -3,6 +3,12 @@ package com.example.KutupahaneOtomasyonu.entity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kütüphane sisteminin "Hareket Dökümü" (Transaction) tablosudur.
+ * Bir üyenin bir kitabı ödünç almasından iade etmesine kadar geçen süreci kayıt altına alır.
+ * Ceza takibi ve ödeme durumları da (performans artışı için) bu sınıf üzerinden yönetilir.
+ */
 @Entity
 @Table(name = "odunc_islemleri")
 public class OduncIslemi {
@@ -11,6 +17,10 @@ public class OduncIslemi {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer oduncId;
 
+    /*
+     * İLİŞKİLER
+     * Bir ödünç işlemi mutlaka BİR ÜYE ve BİR KİTAP ile ilişkili olmalıdır.
+     */
     @ManyToOne
     @JoinColumn(name = "uye_id")
     private Uye uye;
@@ -19,19 +29,37 @@ public class OduncIslemi {
     @JoinColumn(name = "kitap_id")
     private Kitap kitap;
 
+    // İşlem Tarihleri
     private LocalDateTime alisTarihi;
     private LocalDateTime sonTeslimTarihi;
-    private LocalDateTime iadeTarihi;
+    private LocalDateTime iadeTarihi; // Kitap geri geldiğinde dolar, yoksa null'dır.
 
-    // Veritabaninda VARCHAR veya ENUM olarak tutulabilir
+    /*
+     * İŞLEM DURUMU
+     * İşlemin şu anki statüsünü tutar (Örn: DEVAM_EDIYOR, TESLIM_EDILDI, GECIKMEDE).
+     * EnumType.STRING: Veritabanında sayı (0,1) yerine okunabilir metin olarak tutulur.
+     */
     @Enumerated(EnumType.STRING)
     private OduncDurumu durum;
 
-    // ISTE HATA VEREN VE SONRADAN EKLEDIGIMIZ ALANLAR:
-    private boolean bildirimGonderildi = false;
-    private boolean cezaOdendiMi = false;
+    /*
+     * OPERASYONEL KONTROL ALANLARI
+     * Ceza ve bildirim süreçlerini yönetmek için kullanılan bayraklar (flags).
+     */
+    private boolean bildirimGonderildi = false; // Üyeye "Borcun var" maili/bildirimi gitti mi?
+    private boolean cezaOdendiMi = false;       // Eski sistemden kalan kontrol alanı.
 
-    // --- GETTER VE SETTERLAR ---
+    /*
+     * FİNANSAL ALANLAR
+     * Ceza takibini kolaylaştırmak için eklenmiştir.
+     */
+    private double cezaMiktari = 0.0;
+
+    // Ödeme Durumu: "YOK", "ODENMEDI", "ONAY_BEKLIYOR", "ODENDI"
+    private String odemeDurumu = "YOK";
+
+    // --- GETTER VE SETTER METODLARI ---
+
     public Integer getOduncId() { return oduncId; }
     public void setOduncId(Integer oduncId) { this.oduncId = oduncId; }
 
@@ -58,9 +86,6 @@ public class OduncIslemi {
 
     public boolean isCezaOdendiMi() { return cezaOdendiMi; }
     public void setCezaOdendiMi(boolean cezaOdendiMi) { this.cezaOdendiMi = cezaOdendiMi; }
-
-    private double cezaMiktari = 0.0;
-    private String odemeDurumu = "YOK"; // YOK, ODENMEDI, ONAY_BEKLIYOR, ODENDI
 
     public double getCezaMiktari() { return cezaMiktari; }
     public void setCezaMiktari(double cezaMiktari) { this.cezaMiktari = cezaMiktari; }

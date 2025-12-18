@@ -13,8 +13,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kitap yönetimi için İş Mantığı (Business Logic) katmanıdır.
+ * Kitap ekleme, silme, güncelleme ve arama işlemlerini yönetir.
+ * Veritabanı tutarlılığını sağlamak için gerekli kontrolleri (Validasyon) yapar.
+ */
 @Service
-public class KitapServisi { // BookService -> KitapServisi
+public class KitapServisi {
 
     private final KitapRepository kitapRepository;
     private final YazarRepository yazarRepository;
@@ -27,75 +33,83 @@ public class KitapServisi { // BookService -> KitapServisi
         this.oduncRepository = oduncRepository;
     }
 
-    public List<Kitap> tumunuGetir() { return kitapRepository.findAll(); }
+    public List<Kitap> tumunuGetir() {
+        return kitapRepository.findAll();
+    }
 
-    public Optional<Kitap> idIleGetir(Integer id) { return kitapRepository.findById(id); }
+    public Optional<Kitap> idIleGetir(Integer id) {
+        return kitapRepository.findById(id);
+    }
 
-    // @Transactional: "Ya hep ya hiç" kuralıdır.
-    // Eğer metodun yarısında bir hata olursa, yapılan tüm veritabanı işlemlerini geri alır (Rollback).
-    // Kitap kaydedilirken yazar işleminde hata çıkarsa, yarım yamalak kayıt oluşmasını önler.
+    /*
+     * KİTAP KAYDETME VE GÜNCELLEME
+     * @Transactional: İşlem bütünlüğünü (Atomicity) garanti eder.
+     * Metot içinde bir hata oluşursa yapılan tüm veritabanı değişikliklerini geri alır.
+     *
+     * ÖZELLİK: Akıllı Yazar Yönetimi
+     * Kitap eklenirken, girilen yazarın sistemde kayıtlı olup olmadığını kontrol eder.
+     * Eğer yazar varsa yeni kayıt oluşturmaz, mevcut yazarı kitaba bağlar (Mükerrer kaydı önler).
+     */
     @Transactional
     public Kitap kaydet(Kitap kitap) {
-        // --- STOK KONTROLU ---
+        // Validasyon: Stok sayısı kontrolü
         if (kitap.getStokSayisi() == null || kitap.getStokSayisi() < 1) {
-            throw new IllegalArgumentException("Stok adedi en az 1 olmalidir!");
+            throw new IllegalArgumentException("Stok adedi en az 1 olmalıdır!");
         }
 
-        // --- YAZAR KONTROLU (AKILLI EKLEME) ---
-        // Kitabi eklerken gelen Yazar nesnesini aliyoruz.
         Yazar gelenYazar = kitap.getYazar();
 
         if (gelenYazar != null && gelenYazar.getAd() != null) {
             String ad = gelenYazar.getAd().trim();
             String soyad = gelenYazar.getSoyad().trim();
 
-            // Veritabanina soruyoruz: "Boyle bir yazar zaten var mi?"
+            // Mükerrer Yazar Kontrolü
             Optional<Yazar> mevcutYazar = yazarRepository.findByAdAndSoyad(ad, soyad);
 
             if (mevcutYazar.isPresent()) {
-                // VARSA: Yeni yazar yaratma, var olani kitaba bagla.
-                // Boylece "Ahmet Umit" isminden 50 tane kayit olusmasini engelleriz.
+                // Yazar zaten varsa, mevcut ID'yi kullan.
                 kitap.setYazar(mevcutYazar.get());
             } else {
-                // YOKSA: Yeni yazari once kaydet, sonra kitaba bagla.
+                // Yazar yoksa, önce yazarı kaydet sonra kitaba bağla.
                 gelenYazar.setAd(ad);
                 gelenYazar.setSoyad(soyad);
                 Yazar kaydedilenYazar = yazarRepository.save(gelenYazar);
                 kitap.setYazar(kaydedilenYazar);
             }
         } else {
-            throw new RuntimeException("Yazar adi bos olamaz!");
+            throw new RuntimeException("Yazar adı boş olamaz!");
         }
 
-        // Her sey tamamsa kitabi kaydet.
         return kitapRepository.save(kitap);
     }
 
+    /*
+     * KİTAP SİLME İŞLEMİ
+     * İlişkisel bütünlüğü korumak için iki aşamalı güvenlik kontrolü yapar.
+     * 1. Eğer kitap şu an ödünç verilmişse silme işlemini engeller.
+     * 2. Eğer kitap geçmişte işlem görmüşse, Foreign Key hatası almamak için
+     * önce geçmiş kayıtları temizler, sonra kitabı siler.
+     */
     @Transactional
     public void sil(Integer id) {
-        // --- GUVENLI SILME KONTROLU ---
-        // Kitabi silmeden once soruyoruz: "Bu kitap su an bir uyede mi?"
-        // (Repository'de yazdigimiz exists... metodu burada devreye giriyor)
+        // 1. Güvenlik Kontrolü: Kitap şu an kullanımda mı?
         boolean kitapBirindeMi = oduncRepository.existsByKitap_KitapIdAndIadeTarihiIsNull(id);
 
         if (kitapBirindeMi) {
-            // Eger birindeyse SILME, hata firlat. Veri butunlugu icin sarttir.
-            throw new IllegalStateException("Bu kitap su an bir uyede! Teslim almadan silemezsiniz.");
+            throw new IllegalStateException("Bu kitap şu an bir üyede! Teslim almadan silemezsiniz.");
         }
 
-        // --- GECMISI TEMIZLEME ---
-        // Kitap kimse de degil ama gecmiste 50 kere odunc alinmis olabilir.
-        // Kitabi silince bu eski kayitlar "bosa dusmesin" diye onlari da siliyoruz.
+        // 2. Geçmiş Temizliği: İlişkili eski kayıtların silinmesi
         List<OduncIslemi> gecmis = oduncRepository.findByKitap_KitapId(id);
         if (!gecmis.isEmpty()) {
             oduncRepository.deleteAll(gecmis);
         }
 
-        // Ve mutlu son: Kitabi siliyoruz.
+        // 3. Kitabın Silinmesi
         kitapRepository.deleteById(id);
     }
 
-    // Arama kutusu icin metot
+    // İsme göre dinamik arama
     public List<Kitap> ismeGoreAra(String kitapAdi) {
         return kitapRepository.findByKitapAdiContainingIgnoreCase(kitapAdi);
     }

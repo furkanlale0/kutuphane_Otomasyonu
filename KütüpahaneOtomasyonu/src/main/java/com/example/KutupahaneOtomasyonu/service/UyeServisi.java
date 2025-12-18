@@ -1,5 +1,6 @@
 package com.example.KutupahaneOtomasyonu.service;
 
+import com.example.KutupahaneOtomasyonu.entity.OduncDurumu;
 import com.example.KutupahaneOtomasyonu.entity.OduncIslemi;
 import com.example.KutupahaneOtomasyonu.entity.Uye;
 import com.example.KutupahaneOtomasyonu.repository.OduncRepository;
@@ -12,13 +13,17 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Üye işlemlerini yöneten servis katmanıdır.
+ * Yeni üye kaydı, şifreleme işlemleri ve üyenin profil sayfasında göreceği
+ * anlık borç/ceza bilgilerinin hesaplanmasından sorumludur.
+ */
 @Service
-public class UyeServisi { // MemberService -> UyeServisi
+public class UyeServisi {
 
     private final UyeRepository uyeRepository;
     private final OduncRepository oduncRepository;
-
-    // Sifreleri veritabanina "1234" diye acik kaydetmemek icin sifreleyici.
     private final PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -28,83 +33,96 @@ public class UyeServisi { // MemberService -> UyeServisi
         this.passwordEncoder = passwordEncoder;
     }
 
-    // --- 1. YENI UYE KAYDI ---
+    /*
+     * YENİ ÜYE KAYDI
+     * Kullanıcının şifresini güvenli bir şekilde hashleyerek veritabanına kaydeder.
+     * Mükerrer e-posta kontrolü yapar.
+     */
     public String uyeKaydet(Uye uye) {
-        // MANTIK DEGISIKLIGI: Kullanici adi yok, E-posta kontrolu yapiyoruz.
-        // Repository'ye ekledigimiz "existsByEmail" metodunu kullaniyoruz.
+        // E-posta kontrolü (Business Rule)
         if (uyeRepository.existsByEmail(uye.getEmail())) {
-            return "Bu e-posta adresi zaten kayitli.";
+            return "Bu e-posta adresi zaten kayıtlı.";
         }
 
-        // Sifreyi sifrele (Hash'le). "1234" girerse veritabanina "$2a$10$..." olarak kaydolur.
+        // Şifre Güvenliği (BCrypt Hashing)
+        // Kullanıcı "1234" girse bile veritabanında okunamaz bir formatta saklanır.
         uye.setSifre(passwordEncoder.encode(uye.getSifre()));
-
-        // Kayit tarihini su an olarak ayarla.
         uye.setKayitTarihi(LocalDateTime.now());
 
         uyeRepository.save(uye);
         return "Islem Basarili";
     }
 
-    // --- 2. KULLANICI BULMA (Login Icin) ---
-    // Giris yaparken kullanici adini degil, E-postayi kullaniyoruz.
+    // Login işlemi için kullanıcıyı E-posta ile bulur.
     public Optional<Uye> emailIleGetir(String email) {
         return uyeRepository.findByEmail(email);
     }
 
-    // --- 3. PROFIL VE CEZA HESAPLAMA (Dinamik Hesaplama) ---
-    // Uyenin profil sayfasini actigi anda calisir.
-    // Veritabanindaki "Cezalar" tablosuna bakmaz, o anki gecikmeleri canli hesaplar.
+    /*
+     * ÜYE PROFİL VERİLERİ VE BORÇ HESAPLAMA
+     * Üye profiline girdiğinde çalışır.
+     * Hem kesinleşmiş borçları hem de o an işlemeye devam eden (teslim edilmemiş)
+     * gecikme cezalarını anlık olarak hesaplar.
+     */
     public Map<String, Object> uyeProfiliniGetir(Integer uyeId) {
         Uye uye = uyeRepository.findById(uyeId)
-                .orElseThrow(() -> new RuntimeException("Uye bulunamadi"));
+                .orElseThrow(() -> new RuntimeException("Üye bulunamadı"));
 
-        // Uyenin butun odunc gecmisini cek.
         List<OduncIslemi> gecmis = oduncRepository.findByUye_UyeId(uyeId);
 
         double toplamBorc = 0;
         List<Map<String, Object>> cezaDetaylari = new ArrayList<>();
+        LocalDateTime bugun = LocalDateTime.now();
 
         for (OduncIslemi islem : gecmis) {
-            // Eger cezasi zaten odenmisse hesaplamaya katma, pas gec.
-            if (Boolean.TRUE.equals(islem.isCezaOdendiMi())) continue;
 
-            long gecikenGun = 0;
+            // Eğer borç zaten ödenmişse ("ODENDI") hesaplamaya katma.
+            if ("ODENDI".equals(islem.getOdemeDurumu())) continue;
 
-            // Hesaplama Tarihi: Iade ettiyse "Iade Tarihi", etmediyse "Bugun".
-            LocalDateTime hesaplamaTarihi = (islem.getIadeTarihi() != null) ? islem.getIadeTarihi() : LocalDateTime.now();
+            double islemBorcu = 0.0;
+            long gecikmeSuresi = 0;
 
-            // Gun sinirini gecti mi? (Son Teslim Tarihinden sonra mi?)
-            if (hesaplamaTarihi.isAfter(islem.getSonTeslimTarihi())) {
-                gecikenGun = ChronoUnit.DAYS.between(islem.getSonTeslimTarihi(), hesaplamaTarihi);
+            // DURUM 1: Kitap hala üyede ve süresi geçmiş (AKTİF GECİKME)
+            // Demo için dakika hesabı yapıyoruz.
+            if (islem.getDurum() == OduncDurumu.ODUNC_ALINDI && islem.getSonTeslimTarihi().isBefore(bugun)) {
+                gecikmeSuresi = ChronoUnit.MINUTES.between(islem.getSonTeslimTarihi(), bugun);
+                islemBorcu = gecikmeSuresi * 5.0; // Dakika başı 5 TL
+            }
+            // DURUM 2: Kitap iade edilmiş ama borç ödenmemiş (KESİNLEŞMİŞ BORÇ)
+            else if ("ODENMEDI".equals(islem.getOdemeDurumu()) || "ONAY_BEKLIYOR".equals(islem.getOdemeDurumu())) {
+                islemBorcu = islem.getCezaMiktari();
+                // Detayda göstermek için tahmini süre (Tutar / 5)
+                gecikmeSuresi = (long) (islemBorcu / 5.0);
             }
 
-            // Gecikme varsa listeye ekle (Gunluk 5 TL)
-            if (gecikenGun > 0) {
-                double cezaTutari = gecikenGun * 5.0;
-                toplamBorc += cezaTutari;
+            // Eğer borç varsa listeye ekle
+            if (islemBorcu > 0) {
+                toplamBorc += islemBorcu;
 
                 Map<String, Object> detay = new HashMap<>();
                 detay.put("kitapAdi", islem.getKitap().getKitapAdi());
-                detay.put("gecikenGun", gecikenGun);
-                detay.put("tutar", cezaTutari);
+                detay.put("gecikenSure", gecikmeSuresi + " Dakika");
+                detay.put("tutar", islemBorcu);
+                // Onay bekliyorsa parantez içinde belirtelim
+                String durumNotu = "ONAY_BEKLIYOR".equals(islem.getOdemeDurumu()) ? " (Onay Bekliyor)" : "";
+                detay.put("durum", durumNotu);
 
                 cezaDetaylari.add(detay);
             }
         }
 
-        // Sonuclari paketle ve on yuze (Frontend) gonder.
+        // Frontend için JSON paketi hazırlama
         Map<String, Object> cevap = new HashMap<>();
         cevap.put("ad", uye.getAd());
         cevap.put("soyad", uye.getSoyad());
-        cevap.put("email", uye.getEmail()); // Kullanici adi yerine Email gosteriyoruz
+        cevap.put("email", uye.getEmail());
         cevap.put("toplamBorc", toplamBorc);
         cevap.put("cezaDetaylari", cezaDetaylari);
 
         return cevap;
     }
 
-    // --- 4. YARDIMCI METOTLAR ---
+    // --- YARDIMCI METODLAR ---
     public List<Uye> tumunuGetir() {
         return uyeRepository.findAll();
     }
@@ -114,8 +132,7 @@ public class UyeServisi { // MemberService -> UyeServisi
     }
 
     public void sil(Integer id) {
-        // Gercek projede once "Uyenin elinde kitap var mi?" diye kontrol edilmeli.
-        // KitapServisi'nde yaptigimiz gibi burada da kontrol eklenebilir.
+        // Güvenlik: İlerde buraya "Borcu var mı?" kontrolü eklenebilir.
         uyeRepository.deleteById(id);
     }
 }

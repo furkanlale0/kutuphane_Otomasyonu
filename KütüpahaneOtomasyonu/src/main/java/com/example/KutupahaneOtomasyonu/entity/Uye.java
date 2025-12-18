@@ -12,79 +12,87 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
-// @Entity ve @Table: Bu sinifin veritabanindaki karsiligi "Uyeler" tablosudur.
+/*
+ * BU SINIF NE İŞE YARAR?
+ * Kütüphane üyelerinin veritabanı karşılığıdır ("Uyeler" tablosu).
+ *
+ * KRİTİK ÖZELLİK: 'UserDetails' Arayüzü
+ * Bu sınıf sadece veri tutmaz, aynı zamanda Spring Security'nin
+ * kimlik doğrulama sistemine entegre çalışır. Login işlemlerinde
+ * kullanıcı doğrulaması bu sınıf üzerinden yapılır.
+ */
 @Entity
 @Table(name = "Uyeler")
-// @Data: Getter, Setter, toString metodlarini otomatik olusturur.
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-// --- COK ONEMLI: UserDetails Arayuzu ---
-// Spring Security'ye diyoruz ki: "Bu sinif, senin guvenlik sistemine uyumlu bir kullanici modelidir."
-// Bunu dedigimiz icin asagida Spring'in zorunlu kildigi bazi metodlari (@Override) eklemek zorundayiz.
-public class Uye implements UserDetails { // Member -> Uye
+public class Uye implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "uye_id")
     private Integer uyeId;
 
-    // Veritabanindaki 'ad' sutunu
     private String ad;
 
-    // Veritabanindaki 'soyad' sutunu
     private String soyad;
 
-    // Veritabanindaki 'email' sutunu (Benzersizdir)
-    // SQL tablonda "kullanici_adi" sutunu olmadigi icin, giris yaparken Email kullanacagiz.
+    /*
+     * KULLANICI ADI YERİNE EMAIL
+     * Sistemde giriş yaparken kullanıcı adı yerine E-posta adresi kullanılır.
+     * Bu yüzden unique (benzersiz) olması zorunludur.
+     */
     @Column(nullable = false, unique = true)
     private String email;
 
-    // Sifre burada saklanir (Sifrelenmis/Hashlenmis olarak).
     @Column(nullable = false)
     private String sifre;
 
-    // Veritabanindaki 'telefon' sutunu
     private String telefon;
 
-    // Uyenin sisteme kayit oldugu tarih.
     @Column(name = "kayit_tarihi")
     private LocalDateTime kayitTarihi;
 
-    // --- USERDETAILS ICIN ZORUNLU METOTLAR ---
-    // Spring Security soruyor: "Bu adamin kullanici adi (username) nedir?"
+    // --- SPRING SECURITY ZORUNLU METODLARI ---
+
+    /*
+     * YETKİ TANIMLAMA
+     * Sisteme giren bu kişinin rolü nedir?
+     * Bu sınıf normal üyeleri temsil ettiği için sabit olarak "UYE" yetkisi verilir.
+     */
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("UYE"));
+    }
+
+    /*
+     * KİMLİK BİLGİSİ
+     * Spring Security "Username" istediğinde biz Email adresini döneriz.
+     */
     @Override
     public String getUsername() {
-        // Bizim tabloda ayri bir "username" yok, email'i kullanici adi sayiyoruz.
         return email;
     }
 
-    // Spring Security soruyor: "Sifresi nedir?"
     @Override
     public String getPassword() {
         return sifre;
     }
 
-    // Spring Security soruyor: "Yetkisi (rolu) nedir?"
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Biz de diyoruz ki: "Bu bir Uyedir, yetkisi 'UYE' olsun."
-        return List.of(new SimpleGrantedAuthority("UYE"));
-    }
-
-    // Hesap suresi doldu mu? (true = Hayir, suresi dolmadi, gecerli)
+    /*
+     * HESAP DURUM KONTROLLERİ
+     * Hesabın süresi doldu mu? Kilitli mi? Şifre süresi bitti mi?
+     * Şimdilik basitlik adına hepsine "true" (Sorun Yok/Aktif) dönüyoruz.
+     */
     @Override
     public boolean isAccountNonExpired() { return true; }
 
-    // Hesap kilitli mi? (true = Hayir, kilitli degil, acik)
     @Override
     public boolean isAccountNonLocked() { return true; }
 
-    // Sifrenin suresi doldu mu? (true = Hayir, hala gecerli)
     @Override
     public boolean isCredentialsNonExpired() { return true; }
 
-    // Hesap aktif mi? (true = Evet, aktif)
     @Override
     public boolean isEnabled() { return true; }
 }
