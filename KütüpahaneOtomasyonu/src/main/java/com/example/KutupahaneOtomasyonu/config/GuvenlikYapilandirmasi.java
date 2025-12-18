@@ -25,26 +25,26 @@ public class GuvenlikYapilandirmasi {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable) // Form guvenligini kapatiyoruz (API oldugu icin)
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        // 1. HERKESE ACIK OLAN YERLER (Login gerekmez)
+                        // 1. HERKESE ACIK OLANLAR
                         .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/dashboard.html", // HTML dosyasina erisime izin ver (Veriyi zaten API koruyor)
-                                "/app.js",         // JavaScript dosyasina izin ver
-                                "/api/auth/**",    // Giris ve Kayit endpointlerine izin ver
-                                "/css/**",
-                                "/js/**",
-                                "/images/**"
+                                "/", "/index.html", "/dashboard.html", "/app.js",
+                                "/api/auth/**",  // Giris ve Kayit
+                                "/api/kitaplar"  // Kitap listeleme (GET) herkese acik olsun dersen
                         ).permitAll()
 
-                        // 2. DIGER TUM ISTEKLER ICIN GIRIS SART
+                        // 2. SADECE UYE VE ADMINLER (Giris yapmis herkes)
+                        // HATA BURADAYDI: /api/loans yerine /api/odunc yazdik!
+                        .requestMatchers("/api/odunc/**").authenticated()
+                        .requestMatchers("/api/uyeler/**").authenticated()
+
+                        // 3. ADMIN OZEL ISLEMLERI (Kitap silme/ekleme)
+                        .requestMatchers("/api/kitaplar/**").authenticated() // Detayli yetki sonra ayarlanabilir
+
                         .anyRequest().authenticated()
                 )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // Sunucuda oturum tutma (Token kullaniyoruz)
-                )
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(kimlikSaglayici)
                 .addFilterBefore(jwtFiltresi, UsernamePasswordAuthenticationFilter.class);
 

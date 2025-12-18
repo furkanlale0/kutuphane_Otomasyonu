@@ -4,168 +4,196 @@ import com.example.KutupahaneOtomasyonu.entity.*;
 import com.example.KutupahaneOtomasyonu.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
-public class OduncServisi { // LoanService -> OduncServisi
+public class OduncServisi {
 
-    private final OduncRepository oduncRepository;
-    private final KitapRepository kitapRepository;
-    private final UyeRepository uyeRepository;
+    @Autowired private OduncRepository oduncRepository;
+    @Autowired private KitapRepository kitapRepository;
+    @Autowired private UyeRepository uyeRepository;
 
-    @Autowired
-    public OduncServisi(OduncRepository oduncRepository, KitapRepository kitapRepository, UyeRepository uyeRepository) {
-        this.oduncRepository = oduncRepository;
-        this.kitapRepository = kitapRepository;
-        this.uyeRepository = uyeRepository;
-    }
-
-    // --- KITAP ODUNC ALMA ---
-    @Transactional // Stok duserken hata olursa islemi geri alir.
+    // --- 1. KITAP ODUNC VER (Demo: 1 Dakika Süre) ---
     public String kitapOduncVer(Integer uyeId, Integer kitapId) {
-        // 1. Kontrol: Bu uye bu kitabi daha once almis ve iade etmemis mi?
-        boolean zatenVar = oduncRepository.existsByUye_UyeIdAndKitap_KitapIdAndIadeTarihiIsNull(uyeId, kitapId);
-        if (zatenVar) return "Bu kitabi zaten odunc almissiniz, once eskisini getirin!";
+        Optional<Kitap> k = kitapRepository.findById(kitapId);
+        Optional<Uye> u = uyeRepository.findById(uyeId);
+        if (k.isEmpty() || u.isEmpty()) return "Hata";
 
-        Optional<Uye> uyeKutusu = uyeRepository.findById(uyeId);
-        Optional<Kitap> kitapKutusu = kitapRepository.findById(kitapId);
+        Kitap kitap = k.get();
+        if (kitap.getStokSayisi() <= 0) return "Stok Yok";
 
-        if (uyeKutusu.isEmpty() || kitapKutusu.isEmpty()) return "Hata: Uye veya kitap bulunamadi.";
+        // Aktif borcu (ödenmemiş veya onay bekleyen) var mı?
+        boolean borcluMu = oduncRepository.findAll().stream()
+                .anyMatch(o -> o.getUye().getUyeId().equals(uyeId) &&
+                        ( "ODENMEDI".equals(o.getOdemeDurumu()) || "ONAY_BEKLIYOR".equals(o.getOdemeDurumu()) ));
+        if(borcluMu) return "Ödenmemiş cezanız varken yeni kitap alamazsınız!";
 
-        Kitap kitap = kitapKutusu.get();
-
-        // 2. Kontrol: Stokta kitap kaldi mi?
-        if (kitap.getStokSayisi() <= 0) return "Stokta kitap kalmadi!";
-
-        // 3. Islem: Stok dusur
-        kitap.setStokSayisi(kitap.getStokSayisi() - 1);
-        kitapRepository.save(kitap);
-
-        // 4. Islem: Odunc kaydi olustur
         OduncIslemi islem = new OduncIslemi();
-        islem.setUye(uyeKutusu.get());
+        islem.setUye(u.get());
         islem.setKitap(kitap);
         islem.setAlisTarihi(LocalDateTime.now());
-        // 14 gun (2 hafta) sure veriyoruz.
-        islem.setSonTeslimTarihi(LocalDateTime.now().plusDays(14));
+        islem.setSonTeslimTarihi(LocalDateTime.now().plusMinutes(1)); // 1 Dakika Süre
         islem.setDurum(OduncDurumu.ODUNC_ALINDI);
-        islem.setCezaOdendiMi(false);
+        islem.setOdemeDurumu("YOK");
 
         oduncRepository.save(islem);
-
         return "Islem Basarili";
     }
 
-    // --- KITAP IADE ETME ---
-    @Transactional
+    // --- 2. KITAP IADE AL (Cezayı Hesapla ve Kaydet) ---
     public String kitapIadeAl(Integer uyeId, Integer kitapId) {
-        // Uyenin elindeki o kitabi bul (List donuyor ama biz ilkini alacagiz).
-        List<OduncIslemi> aktifIslemler = oduncRepository.findByUye_UyeIdAndKitap_KitapIdAndIadeTarihiIsNull(uyeId, kitapId);
+        List<OduncIslemi> kayitlar = oduncRepository.findAll();
+        OduncIslemi islem = kayitlar.stream()
+                .filter(o -> o.getUye().getUyeId().equals(uyeId) && o.getKitap().getKitapId().equals(kitapId) && o.getDurum() == OduncDurumu.ODUNC_ALINDI)
+                .findFirst().orElse(null);
 
-        if (aktifIslemler.isEmpty()) return "Bu kitap sizde gorunmuyor.";
+        if (islem == null) return "Kayit Yok";
 
-        // Kaydi bul
-        OduncIslemi islem = aktifIslemler.get(0);
-
-        // Iade tarihini bugun yap ve durumu guncelle
-        islem.setIadeTarihi(LocalDateTime.now());
+        LocalDateTime bugun = LocalDateTime.now();
+        islem.setIadeTarihi(bugun);
         islem.setDurum(OduncDurumu.IADE_EDILDI);
 
-        // GECIKME KONTROLU: Eger gecikmisse durumu "GECIKTI" yapalim mi?
-        // Kod karmasiklasmasin diye burada sadece IADE_EDILDI yapiyoruz, ceza hesaplamada tarihe bakacagiz zaten.
-
+        // CEZA HESAPLAMA (Demo: Dakikası 5 TL)
+        if (islem.getSonTeslimTarihi().isBefore(bugun)) {
+            long gecikenDakika = ChronoUnit.MINUTES.between(islem.getSonTeslimTarihi(), bugun);
+            if (gecikenDakika > 0) {
+                double ceza = gecikenDakika * 5.0;
+                islem.setCezaMiktari(ceza);
+                islem.setOdemeDurumu("ODENMEDI"); // Ceza var ve henüz ödenmedi
+            }
+        }
         oduncRepository.save(islem);
-
-        // Stok arttir
-        Kitap kitap = islem.getKitap();
-        kitap.setStokSayisi(kitap.getStokSayisi() + 1);
-        kitapRepository.save(kitap);
-
         return "Islem Basarili";
     }
 
-    // --- UYENIN GECMISI ---
-    public List<Map<String, Object>> uyeGecmisiniGetir(Integer uyeId) {
-        List<OduncIslemi> gecmis = oduncRepository.findByUye_UyeId(uyeId);
-        return listeyiFormatla(gecmis);
-    }
+    // --- 3. UYE: ÖDEME BILDIRIMI YAP ("Ödedim" butonu) ---
+    public boolean odemeBildirimiYap(Integer uyeId) {
+        List<OduncIslemi> hepsi = oduncRepository.findAll();
+        boolean islemYapildi = false;
 
-    // --- UYENIN ELINDEKI AKTIF KITAPLAR ---
-    public List<Map<String, Object>> aktifOduncleriGetir(Integer uyeId) {
-        List<OduncIslemi> oduncler = oduncRepository.findByUye_UyeIdAndIadeTarihiIsNull(uyeId);
-        return listeyiFormatla(oduncler);
-    }
-
-    // --- CEZA HESAPLAMA MOTORU ---
-    // Burasi biraz matematiksel, butun kayitlari tarayip borclu olanlari bulur.
-    public List<Map<String, Object>> tumCezalariHesapla() {
-        List<OduncIslemi> tumIslemler = oduncRepository.findAll();
-        List<Map<String, Object>> cezalar = new ArrayList<>();
-
-        for (OduncIslemi islem : tumIslemler) {
-            // Eger ceza zaten odenmisse (veya borcu yoksa) gec.
-            if (Boolean.TRUE.equals(islem.getCezaOdendiMi())) continue;
-
-            // Karsilastirma Tarihi: Kitap iade edildiyse "Iade Tarihi", edilmediyse "Bugun".
-            LocalDateTime karsilastirmaTarihi = (islem.getIadeTarihi() != null) ? islem.getIadeTarihi() : LocalDateTime.now();
-
-            // Eger (Iade/Bugun) tarihi, Son Teslim Tarihinden sonraysa -> GECIKME VAR
-            if (karsilastirmaTarihi.isAfter(islem.getSonTeslimTarihi())) {
-
-                // Kac gun gecikti?
-                long gecikenGun = ChronoUnit.DAYS.between(islem.getSonTeslimTarihi(), karsilastirmaTarihi);
-
-                if (gecikenGun > 0) {
-                    Map<String, Object> satir = new HashMap<>();
-                    satir.put("oduncId", islem.getOduncId());
-                    satir.put("uyeAdSoyad", islem.getUye().getAd() + " " + islem.getUye().getSoyad());
-                    satir.put("kitapAdi", islem.getKitap().getKitapAdi());
-                    satir.put("gecikenGun", gecikenGun);
-                    // Gunluk ceza bedeli: 5.0 TL
-                    satir.put("toplamTutar", gecikenGun * 5.0);
-                    satir.put("iadeEdildiMi", islem.getIadeTarihi() != null);
-
-                    cezalar.add(satir);
-                }
+        for (OduncIslemi o : hepsi) {
+            // Sadece bu üyenin ÖDENMEMİŞ cezalarını bul
+            if (o.getUye().getUyeId().equals(uyeId) && "ODENMEDI".equals(o.getOdemeDurumu())) {
+                o.setOdemeDurumu("ONAY_BEKLIYOR"); // Durumu değiştir
+                oduncRepository.save(o);
+                islemYapildi = true;
             }
         }
-        return cezalar;
+        return islemYapildi;
     }
 
-    // --- CEZA ODEME ---
-    public boolean cezaOde(Integer oduncId) {
-        Optional<OduncIslemi> islemKutusu = oduncRepository.findById(oduncId);
-        if (islemKutusu.isPresent()) {
-            OduncIslemi islem = islemKutusu.get();
-            islem.setCezaOdendiMi(true);
+    // --- 4. ADMIN: ÖDEMEYI ONAYLA ("Tahsil Et" butonu) ---
+    public boolean odemeyiOnayla(Integer oduncId) { // uyeId yerine oduncId ile işlem yapıyoruz ki spesifik olsun
+        Optional<OduncIslemi> islemOp = oduncRepository.findById(oduncId);
+        if(islemOp.isPresent()) {
+            OduncIslemi islem = islemOp.get();
+            // Onay bekleyen veya ödenmemiş cezayı kapat
+            islem.setOdemeDurumu("ODENDI");
             oduncRepository.save(islem);
             return true;
         }
         return false;
     }
 
-    // --- YARDIMCI METOT: Listeyi JSON Formatina Cevirir ---
-    private List<Map<String, Object>> listeyiFormatla(List<OduncIslemi> liste) {
-        List<Map<String, Object>> sonucListesi = new ArrayList<>();
-        for (OduncIslemi b : liste) {
-            Map<String, Object> satir = new HashMap<>();
-            satir.put("kitapId", b.getKitap().getKitapId());
-            satir.put("kitapAdi", b.getKitap().getKitapAdi());
-            satir.put("alisTarihi", b.getAlisTarihi().toString());
-            satir.put("sonTeslimTarihi", b.getSonTeslimTarihi().toString());
-            // Iade tarihi varsa string yap, yoksa null don
-            satir.put("iadeTarihi", (b.getIadeTarihi() != null) ? b.getIadeTarihi().toString() : null);
-            satir.put("durum", b.getDurum());
-            sonucListesi.add(satir);
+    // --- YARDIMCI METOD: ANLIK CEZA HESAPLA ---
+    private Map<String, Object> cezaVerisiHazirla(OduncIslemi o) {
+        LocalDateTime bugun = LocalDateTime.now();
+        double hesaplananCeza = 0;
+        long gecikenSure = 0;
+        String durumMetni = o.getOdemeDurumu(); // Varsayılan durum
+
+        // A) Kitap hala üyede ve süresi geçmiş (AKTİF CEZA)
+        if (o.getDurum() == OduncDurumu.ODUNC_ALINDI && o.getSonTeslimTarihi().isBefore(bugun)) {
+            gecikenSure = ChronoUnit.MINUTES.between(o.getSonTeslimTarihi(), bugun);
+            hesaplananCeza = gecikenSure * 5.0; // Dakika başı 5 TL
+            durumMetni = "AKTIF_GECIKME"; // Özel durum kodu
         }
-        return sonucListesi;
+        // B) Kitap iade edilmiş ve cezası var (KESİNLEŞMİŞ CEZA)
+        else if (o.getCezaMiktari() > 0) {
+            hesaplananCeza = o.getCezaMiktari();
+            // Gecikme süresi iade tarihine göre hesaplanmış olmalı ama burada göstermelik 0 geçebiliriz
+            // veya veritabanında tutuyorsak onu çekeriz. Şimdilik admin görsün diye:
+            gecikenSure = (long) (hesaplananCeza / 5.0);
+        }
+
+        // Eğer ceza yoksa boş dön
+        if (hesaplananCeza <= 0) return null;
+
+        Map<String, Object> m = new HashMap<>();
+        m.put("oduncId", o.getOduncId());
+        m.put("uye", o.getUye().getAd() + " " + o.getUye().getSoyad());
+        m.put("kitap", o.getKitap().getKitapAdi());
+        m.put("gecikme", gecikenSure + " Dakika");
+        m.put("tutar", hesaplananCeza);
+        m.put("durum", durumMetni); // AKTIF_GECIKME, ODENMEDI, ONAY_BEKLIYOR, ODENDI
+        return m;
+    }
+
+    // --- 5. ADMIN TABLOSU İÇİN CEZALAR (GÜNCELLENDİ) ---
+    public List<Map<String, Object>> tumCezalariGetir() {
+        List<Map<String, Object>> liste = new ArrayList<>();
+        List<OduncIslemi> hepsi = oduncRepository.findAll();
+
+        for (OduncIslemi o : hepsi) {
+            // Sadece (Aktif Gecikme) veya (Kesinleşmiş Borç) veya (Onay Bekleyen) olanları getir
+            // "ODENDI" olanları admin listesinde kalabalık yapmasın diye gizleyebiliriz veya gösterebiliriz.
+            // Şimdilik sadece sorunu olanları gösterelim:
+            Map<String, Object> veri = cezaVerisiHazirla(o);
+            if (veri != null && !o.getOdemeDurumu().equals("ODENDI")) {
+                liste.add(veri);
+            }
+        }
+        return liste;
+    }
+
+    // --- 6. UYE PROFILI İÇİN CEZA DETAYLARI (GÜNCELLENDİ) ---
+    public List<Map<String, Object>> uyeCezaDetaylari(Integer uyeId) {
+        List<Map<String, Object>> liste = new ArrayList<>();
+        List<OduncIslemi> hepsi = oduncRepository.findAll();
+
+        for (OduncIslemi o : hepsi) {
+            if (o.getUye().getUyeId().equals(uyeId)) {
+                Map<String, Object> veri = cezaVerisiHazirla(o);
+                if (veri != null) {
+                    liste.add(veri);
+                }
+            }
+        }
+        return liste;
+    }
+
+    // --- Diğer metodlar (aktifOduncler vb.) aynı kalabilir ---
+    public List<Map<String, Object>> aktifOduncleriGetir(Integer uyeId) {
+        // ... (Eski kodun aynısı)
+        List<Map<String, Object>> liste = new ArrayList<>();
+        for (OduncIslemi o : oduncRepository.findAll()) {
+            if (o.getUye().getUyeId().equals(uyeId) && o.getDurum() == OduncDurumu.ODUNC_ALINDI) {
+                Map<String, Object> veri = new HashMap<>();
+                veri.put("kitapAdi", o.getKitap().getKitapAdi());
+                veri.put("kitapId", o.getKitap().getKitapId());
+                veri.put("sonTeslimTarihi", o.getSonTeslimTarihi().toString());
+                liste.add(veri);
+            }
+        }
+        return liste;
+    }
+
+    public List<Map<String, Object>> uyeGecmisiniGetir(Integer uyeId) {
+        // ... (Eski kodun aynısı)
+        List<Map<String, Object>> liste = new ArrayList<>();
+        for (OduncIslemi o : oduncRepository.findAll()) {
+            if (o.getUye().getUyeId().equals(uyeId)) {
+                Map<String, Object> veri = new HashMap<>();
+                veri.put("kitapAdi", o.getKitap().getKitapAdi());
+                veri.put("alisTarihi", o.getAlisTarihi().toString());
+                veri.put("iadeTarihi", o.getIadeTarihi() != null ? o.getIadeTarihi().toString() : "-");
+                veri.put("durum", o.getDurum().name());
+                liste.add(veri);
+            }
+        }
+        return liste;
     }
 }

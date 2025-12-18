@@ -67,7 +67,7 @@ public class UyeServisi { // MemberService -> UyeServisi
 
         for (OduncIslemi islem : gecmis) {
             // Eger cezasi zaten odenmisse hesaplamaya katma, pas gec.
-            if (Boolean.TRUE.equals(islem.getCezaOdendiMi())) continue;
+            if (Boolean.TRUE.equals(islem.isCezaOdendiMi())) continue;
 
             long gecikenGun = 0;
 

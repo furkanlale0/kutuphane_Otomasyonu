@@ -1,86 +1,70 @@
 package com.example.KutupahaneOtomasyonu.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
-// @Entity: Bu sinifin bir veritabani tablosu oldugunu belirtir.
 @Entity
-// @Table: Veritabanindaki adi "OduncIslemleri" olsun.
-@Table(name = "OduncIslemleri")
-// @Data: Lombok (Getter, Setter, toString metodlarini otomatik yazar).
-@Data
-@NoArgsConstructor // Bos constructor (Hibernate icin zorunlu).
-@AllArgsConstructor // Dolu constructor.
-public class OduncIslemi { // Borrowing -> OduncIslemi
+@Table(name = "odunc_islemleri")
+public class OduncIslemi {
 
-    // @Id: Tablonun benzersiz kimlik numarasi (Primary Key).
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "odunc_id")
     private Integer oduncId;
 
-    // --- OZEL KONTROL: SPAM ENGELLEYICI ---
-    // Mail gonderildi mi kontrolu icin yeni kutucuk.
-    // Otomatik sistem (Scheduler) her calistiginda tekrar tekrar mail atmasin diye,
-    // mail attiktan sonra burayi 'true' yapiyoruz.
-    @Column(name = "bildirim_gonderildi")
-    private boolean bildirimGonderildi = false;
-
-    // --- ILISKI 1: ODUNC ISLEMI -> UYE ---
-    // @ManyToOne: Bir uye birden fazla kitap alabilir (Ama bir islem tek uyeye aittir).
-
-    // fetch = FetchType.EAGER: "Hemen Getir".
-    // Bir odunc islemini sorguladigimizda, kitabi alan uyenin kim oldugunu da hemen bilmek isteriz.
-    // Ekranda "Kitabi alan: Ahmet" yazabilmek icin bu gereklidir.
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "uye_id", nullable = false) // Uye olmadan odunc islemi olamaz.
-
-    // @JsonIgnoreProperties: COK ONEMLI! Sonsuz donguyu ve guvenlik acigini onler.
-    // 1. "oduncIslemleri": Uyenin icindeki eski oduncleri getirme (Sonsuz dongu: Odunc->Uye->Odunc...).
-    // 2. "sifre": Uyenin sifresini JSON icinde gosterme (Guvenlik).
-    // 3. "hibernateLazyInitializer": Teknik hatalari onler.
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "oduncIslemleri", "sifre"})
+    @ManyToOne
+    @JoinColumn(name = "uye_id")
     private Uye uye;
 
-    // --- ILISKI 2: ODUNC ISLEMI -> KITAP ---
-    // @ManyToOne: Bir kitap defalarca odunc alinabilir (Farkli zamanlarda).
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "kitap_id", nullable = false)
-
-    // Kitap objesini JSON'a cevirirken, kitabi ekleyen yoneticiyi ve kitabin eski odunc gecmisini gizle.
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "oduncIslemleri", "ekleyenYonetici"})
+    @ManyToOne
+    @JoinColumn(name = "kitap_id")
     private Kitap kitap;
 
-    // Kitabin alindigi tarih ve saat.
-    @Column(name = "alis_tarihi", nullable = false)
-    private LocalDateTime alisTarihi; // borrowDate -> alisTarihi
+    private LocalDateTime alisTarihi;
+    private LocalDateTime sonTeslimTarihi;
+    private LocalDateTime iadeTarihi;
 
-    // Kitabin geri getirildigi tarih. (Henuz getirilmediyse NULL olur).
-    @Column(name = "iade_tarihi")
-    private LocalDateTime iadeTarihi; // returnDate -> iadeTarihi
-
-    // Son teslim tarihi (Alis tarihi + 15 gun gibi).
-    @Column(name = "son_teslim_tarihi")
-    private LocalDateTime sonTeslimTarihi; // dueDate -> sonTeslimTarihi
-
-    // Durum: ODUNC_ALINDI, IADE_EDILDI, GECIKTI vs. (Enum olarak tutuyoruz).
+    // Veritabaninda VARCHAR veya ENUM olarak tutulabilir
     @Enumerated(EnumType.STRING)
-    @Column(name = "durum", nullable = false)
-    private OduncDurumu durum; // BorrowingStatus -> OduncDurumu
+    private OduncDurumu durum;
 
-    // --- CEZA KONTROLÜ ---
-    // Duzeltilen Kisim: Kucuk 'boolean' yerine buyuk 'Boolean' kullandik.
-    // Neden? Veritabaninda eski kayitlarda bu alan NULL olabilir.
-    // Kucuk 'boolean' null kabul etmez, patlar. Buyuk 'Boolean' null kabul eder.
-    @Column(name = "ceza_odendi_mi")
-    private Boolean cezaOdendiMi = false; // finePaid -> cezaOdendiMi
+    // ISTE HATA VEREN VE SONRADAN EKLEDIGIMIZ ALANLAR:
+    private boolean bildirimGonderildi = false;
+    private boolean cezaOdendiMi = false;
 
-    // Getter ve Setter'lari Lombok (@Data) otomatik halleder ama
-    // manuel eklenen bu metodlar, ozel durumlarda (ornegin boolean isimlendirme kurallari) garanti saglar.
+    // --- GETTER VE SETTERLAR ---
+    public Integer getOduncId() { return oduncId; }
+    public void setOduncId(Integer oduncId) { this.oduncId = oduncId; }
+
+    public Uye getUye() { return uye; }
+    public void setUye(Uye uye) { this.uye = uye; }
+
+    public Kitap getKitap() { return kitap; }
+    public void setKitap(Kitap kitap) { this.kitap = kitap; }
+
+    public LocalDateTime getAlisTarihi() { return alisTarihi; }
+    public void setAlisTarihi(LocalDateTime alisTarihi) { this.alisTarihi = alisTarihi; }
+
+    public LocalDateTime getSonTeslimTarihi() { return sonTeslimTarihi; }
+    public void setSonTeslimTarihi(LocalDateTime sonTeslimTarihi) { this.sonTeslimTarihi = sonTeslimTarihi; }
+
+    public LocalDateTime getIadeTarihi() { return iadeTarihi; }
+    public void setIadeTarihi(LocalDateTime iadeTarihi) { this.iadeTarihi = iadeTarihi; }
+
+    public OduncDurumu getDurum() { return durum; }
+    public void setDurum(OduncDurumu durum) { this.durum = durum; }
+
     public boolean isBildirimGonderildi() { return bildirimGonderildi; }
     public void setBildirimGonderildi(boolean bildirimGonderildi) { this.bildirimGonderildi = bildirimGonderildi; }
+
+    public boolean isCezaOdendiMi() { return cezaOdendiMi; }
+    public void setCezaOdendiMi(boolean cezaOdendiMi) { this.cezaOdendiMi = cezaOdendiMi; }
+
+    private double cezaMiktari = 0.0;
+    private String odemeDurumu = "YOK"; // YOK, ODENMEDI, ONAY_BEKLIYOR, ODENDI
+
+    public double getCezaMiktari() { return cezaMiktari; }
+    public void setCezaMiktari(double cezaMiktari) { this.cezaMiktari = cezaMiktari; }
+
+    public String getOdemeDurumu() { return odemeDurumu; }
+    public void setOdemeDurumu(String odemeDurumu) { this.odemeDurumu = odemeDurumu; }
 }

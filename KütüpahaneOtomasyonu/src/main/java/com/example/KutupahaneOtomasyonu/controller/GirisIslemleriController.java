@@ -1,121 +1,133 @@
 package com.example.KutupahaneOtomasyonu.controller;
 
+import com.example.KutupahaneOtomasyonu.service.JwtServisi;
+import com.example.KutupahaneOtomasyonu.service.KullaniciDetayServisi;
 import com.example.KutupahaneOtomasyonu.entity.Yonetici;
 import com.example.KutupahaneOtomasyonu.entity.Uye;
-import com.example.KutupahaneOtomasyonu.service.YoneticiServisi;
-import com.example.KutupahaneOtomasyonu.service.JwtServisi;
-import com.example.KutupahaneOtomasyonu.service.UyeServisi;
+import com.example.KutupahaneOtomasyonu.repository.YoneticiRepository;
+import com.example.KutupahaneOtomasyonu.repository.UyeRepository;
+import com.example.KutupahaneOtomasyonu.entity.Rol;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.userdetails.User;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
 public class GirisIslemleriController {
 
-    private final YoneticiServisi yoneticiServisi;
-    private final UyeServisi uyeServisi;
-    private final PasswordEncoder sifreleyici;
-    private final JwtServisi jwtServisi;
+    @Autowired private AuthenticationManager authenticationManager;
+    @Autowired private KullaniciDetayServisi kullaniciDetayServisi;
+    @Autowired private JwtServisi jwtServisi;
+    @Autowired private YoneticiRepository yoneticiRepository;
+    @Autowired private UyeRepository uyeRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    public GirisIslemleriController(YoneticiServisi yoneticiServisi, UyeServisi uyeServisi, PasswordEncoder sifreleyici, JwtServisi jwtServisi) {
-        this.yoneticiServisi = yoneticiServisi;
-        this.uyeServisi = uyeServisi;
-        this.sifreleyici = sifreleyici;
-        this.jwtServisi = jwtServisi;
-    }
-
-    // --- KAYIT OLMA (Frontend: /api/auth/kayit) ---
-    // DUZELTME 1: Endpoint adini "register" yerine "kayit" yaptik ki JS ile uyussun.
-    @PostMapping("/kayit")
-    public ResponseEntity<?> kayitOl(@RequestBody Uye uye) {
-        String sonuc = uyeServisi.uyeKaydet(uye);
-
-        if ("Islem Basarili".equals(sonuc)) {
-            return ResponseEntity.ok("Kayit basarili. Giris yapabilirsiniz.");
-        }
-        return ResponseEntity.badRequest().body(sonuc);
-    }
-
-    // --- GIRIS YAPMA (Frontend: /api/auth/giris) ---
-    // DUZELTME 2: Endpoint adini "login" yerine "giris" yaptik.
+    // --- 1. GIRIS YAPMA (LOGIN) ---
     @PostMapping("/giris")
     public ResponseEntity<?> girisYap(@RequestBody GirisIstegi istek) {
+        try {
+            // 1. Kullanici adi ve sifreyi kontrol et
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(istek.getGirilenBilgi(), istek.getSifre())
+            );
 
-        // Frontend'den gelen veri: { "girilenBilgi": "admin" veya "ali@gmail.com", "sifre": "1234" }
-        String girilenBilgi = istek.getGirilenBilgi();
-        String sifre = istek.getSifre();
+            // 2. Kullaniciyi bul (Isim bilgisini almak icin)
+            UserDetails userDetails = kullaniciDetayServisi.loadUserByUsername(istek.getGirilenBilgi());
+            String token = jwtServisi.tokenUret(userDetails);
 
-        // 1. ADIM: YONETICI TABLOSUNA BAK (Kullanici Adi ile)
-        // Yoneticiler hala "admin", "memur1" gibi kullanici adiyla girer.
-        Optional<Yonetici> yoneticiKutusu = yoneticiServisi.kullaniciAdiIleGetir(girilenBilgi);
+            // 3. Rol ve Isim Bilgisini Bul
+            String rol = "UYE";
+            Integer id = 0;
+            String adSoyad = "Kullanıcı"; // Varsayılan
 
-        if (yoneticiKutusu.isPresent()) {
-            Yonetici yonetici = yoneticiKutusu.get();
-            if (sifreleyici.matches(sifre, yonetici.getSifre())) {
-
-                UserDetails yoneticiDetay = User.builder()
-                        .username(yonetici.getKullaniciAdi())
-                        .password(yonetici.getSifre())
-                        .roles(yonetici.getRol().name())
-                        .build();
-
-                return tokenCevabiOlustur(yoneticiDetay, yonetici.getRol().name(), yonetici.getYoneticiId());
+            Optional<Yonetici> yonetici = yoneticiRepository.findByKullaniciAdi(istek.getGirilenBilgi());
+            if (yonetici.isPresent()) {
+                rol = "ADMIN";
+                id = yonetici.get().getYoneticiId();
+                adSoyad = yonetici.get().getAd() + " " + yonetici.get().getSoyad();
+            } else {
+                Optional<Uye> uye = uyeRepository.findByEmail(istek.getGirilenBilgi());
+                if (uye.isPresent()) {
+                    rol = "UYE";
+                    id = uye.get().getUyeId();
+                    adSoyad = uye.get().getAd() + " " + uye.get().getSoyad();
+                }
             }
+
+            // 4. Cevabi gonder (Token + Rol + ID + AD SOYAD)
+            return ResponseEntity.ok(new GirisCevabi(token, rol, id, adSoyad));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Giriş başarısız: " + e.getMessage());
         }
-
-        // 2. ADIM: YONETICI DEGILSE, UYE TABLOSUNA BAK (Email ile)
-        // DUZELTME 3: Uyeler "Kullanici Adi" ile degil "EMAIL" ile aranir.
-        // Onceki kodda burada hata vardi (kullaniciAdiIleGetir cagiriliyordu).
-        Optional<Uye> uyeKutusu = uyeServisi.emailIleGetir(girilenBilgi);
-
-        if (uyeKutusu.isPresent()) {
-            Uye uye = uyeKutusu.get();
-            if (sifreleyici.matches(sifre, uye.getSifre())) {
-
-                UserDetails uyeDetay = User.builder()
-                        .username(uye.getEmail()) // Username yerine Email koyuyoruz
-                        .password(uye.getSifre())
-                        .roles("UYE")
-                        .build();
-
-                return tokenCevabiOlustur(uyeDetay, "UYE", uye.getUyeId());
-            }
-        }
-
-        // 3. ADIM: HICBIRI DEGILSE
-        return ResponseEntity.status(401).body("Giris basarisiz: Bilgiler hatali.");
     }
 
-    private ResponseEntity<?> tokenCevabiOlustur(UserDetails kullanici, String rol, Integer id) {
-        String token = jwtServisi.tokenUret(kullanici);
-
-        Map<String, String> cevap = new HashMap<>();
-        cevap.put("token", token);
-        cevap.put("rol", rol);
-        cevap.put("id", id.toString());
-
-        return ResponseEntity.ok(cevap);
+    // --- 2. KAYIT OLMA (REGISTER) ---
+    @PostMapping("/kayit")
+    public ResponseEntity<?> kayitOl(@RequestBody UyeKayitIstegi istek) {
+        if (uyeRepository.findByEmail(istek.getEmail()).isPresent()) {
+            return ResponseEntity.badRequest().body("Bu email zaten kayıtlı!");
+        }
+        Uye yeniUye = new Uye();
+        yeniUye.setAd(istek.getAd());
+        yeniUye.setSoyad(istek.getSoyad());
+        yeniUye.setEmail(istek.getEmail());
+        yeniUye.setSifre(passwordEncoder.encode(istek.getSifre()));
+        yeniUye.setKayitTarihi(LocalDateTime.now());
+        uyeRepository.save(yeniUye);
+        return ResponseEntity.ok("Kayıt başarılı");
     }
 }
 
-// --- VERI TASIYICI (DTO) ---
-// Frontend'den gelen JSON artik soyle: { "girilenBilgi": "...", "sifre": "..." }
-// Cunku girilen sey Kullanici Adi da olabilir, Email de olabilir.
-class GirisIstegi {
-    private String girilenBilgi; // Eski adi: kullaniciAdi
-    private String sifre;
+// --- YARDIMCI SINIFLAR (Dosyanin altina ekli kalsinlar) ---
 
+class GirisIstegi {
+    private String girilenBilgi;
+    private String sifre;
     public String getGirilenBilgi() { return girilenBilgi; }
     public void setGirilenBilgi(String girilenBilgi) { this.girilenBilgi = girilenBilgi; }
+    public String getSifre() { return sifre; }
+    public void setSifre(String sifre) { this.sifre = sifre; }
+}
+
+class GirisCevabi { // AuthenticationResponse yerine bunu kullaniyoruz
+    private String token;
+    private String rol;
+    private Integer id;
+    private String adSoyad; // Yeni ekledigimiz alan
+
+    public GirisCevabi(String token, String rol, Integer id, String adSoyad) {
+        this.token = token;
+        this.rol = rol;
+        this.id = id;
+        this.adSoyad = adSoyad;
+    }
+
+    public String getToken() { return token; }
+    public String getRol() { return rol; }
+    public Integer getId() { return id; }
+    public String getAdSoyad() { return adSoyad; }
+}
+
+class UyeKayitIstegi {
+    private String ad;
+    private String soyad;
+    private String email;
+    private String sifre;
+    // Getter-Setter
+    public String getAd() { return ad; }
+    public void setAd(String ad) { this.ad = ad; }
+    public String getSoyad() { return soyad; }
+    public void setSoyad(String soyad) { this.soyad = soyad; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
     public String getSifre() { return sifre; }
     public void setSifre(String sifre) { this.sifre = sifre; }
 }

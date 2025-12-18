@@ -4,7 +4,6 @@ import com.example.KutupahaneOtomasyonu.service.OduncServisi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 import java.util.Map;
 
@@ -15,64 +14,52 @@ public class OduncController {
     private final OduncServisi oduncServisi;
 
     @Autowired
-    public OduncController(OduncServisi oduncServisi) {
-        this.oduncServisi = oduncServisi;
-    }
+    public OduncController(OduncServisi oduncServisi) { this.oduncServisi = oduncServisi; }
 
-    // --- 1. KITAP ODUNC AL ---
     @PostMapping("/al")
-    public ResponseEntity<?> kitapAl(@RequestBody OduncIstegi istek) {
-        String sonuc = oduncServisi.kitapOduncVer(istek.getUyeId(), istek.getKitapId());
-        if ("Islem Basarili".equals(sonuc)) {
-            return ResponseEntity.ok("Kitap başarıyla ödünç alındı.");
-        }
-        return ResponseEntity.badRequest().body(sonuc);
+    public ResponseEntity<?> al(@RequestBody OduncIstegi i) {
+        String s = oduncServisi.kitapOduncVer(i.getUyeId(), i.getKitapId());
+        return s.equals("Islem Basarili") ? ResponseEntity.ok("Tamam") : ResponseEntity.badRequest().body(s);
     }
 
-    // --- 2. KITAP IADE ET ---
     @PostMapping("/iade")
-    public ResponseEntity<?> kitapIade(@RequestBody OduncIstegi istek) {
-        String sonuc = oduncServisi.kitapIadeAl(istek.getUyeId(), istek.getKitapId());
-        if ("Islem Basarili".equals(sonuc)) {
-            return ResponseEntity.ok("Kitap başarıyla iade edildi.");
-        }
-        return ResponseEntity.badRequest().body(sonuc);
+    public ResponseEntity<?> iade(@RequestBody OduncIstegi i) {
+        String s = oduncServisi.kitapIadeAl(i.getUyeId(), i.getKitapId());
+        return s.equals("Islem Basarili") ? ResponseEntity.ok("Tamam") : ResponseEntity.badRequest().body(s);
     }
 
-    // --- 3. UYENIN AKTIF ODUNCLERI (Yan Menü İçin) ---
-    @GetMapping("/uye/{uyeId}/aktif")
-    public List<Map<String, Object>> aktifOduncleriGetir(@PathVariable Integer uyeId) {
-        return oduncServisi.aktifOduncleriGetir(uyeId);
-    }
+    @GetMapping("/uye/{id}/aktif")
+    public List<Map<String, Object>> aktif(@PathVariable Integer id) { return oduncServisi.aktifOduncleriGetir(id); }
 
-    // --- 4. UYENIN GECMISI (Modal İçin) ---
-    @GetMapping("/uye/{uyeId}/gecmis")
-    public List<Map<String, Object>> gecmisiGetir(@PathVariable Integer uyeId) {
-        return oduncServisi.uyeGecmisiniGetir(uyeId);
-    }
+    @GetMapping("/uye/{id}/gecmis")
+    public List<Map<String, Object>> gecmis(@PathVariable Integer id) { return oduncServisi.uyeGecmisiniGetir(id); }
 
-    // --- 5. TUM CEZALAR (Admin İçin) ---
+    // --- YENİ EKLENENLER ---
+
+    // 1. Admin Cezalar Sayfası
     @GetMapping("/admin/cezalar")
-    public List<Map<String, Object>> tumCezalar() {
-        return oduncServisi.tumCezalariHesapla();
+    public List<Map<String, Object>> adminCezalar() { return oduncServisi.tumCezalariGetir(); }
+
+    // 2. Üye Ceza Detayları (Profil)
+    @GetMapping("/uye/{id}/ceza-detay")
+    public List<Map<String, Object>> uyeCezalar(@PathVariable Integer id) { return oduncServisi.uyeCezaDetaylari(id); }
+
+    // 3. Üye "Ödedim" Bildirimi
+    @PostMapping("/ceza-bildir/{uyeId}")
+    public ResponseEntity<?> cezaBildir(@PathVariable Integer uyeId) {
+        boolean sonuc = oduncServisi.odemeBildirimiYap(uyeId);
+        return sonuc ? ResponseEntity.ok("Bildirim gönderildi") : ResponseEntity.badRequest().body("Ödenecek ceza yok.");
     }
 
-    // --- 6. CEZA ODEME (Tahsilat) ---
-    @PostMapping("/ceza-ode/{oduncId}")
-    public ResponseEntity<?> cezaOde(@PathVariable Integer oduncId) {
-        boolean sonuc = oduncServisi.cezaOde(oduncId);
-        if (sonuc) return ResponseEntity.ok("Ceza ödendi olarak işaretlendi.");
-        return ResponseEntity.badRequest().body("İşlem başarısız.");
+    // 4. Admin "Onayla" İşlemi
+    @PostMapping("/ceza-onayla/{oduncId}")
+    public ResponseEntity<?> cezaOnayla(@PathVariable Integer oduncId) {
+        boolean sonuc = oduncServisi.odemeyiOnayla(oduncId);
+        return sonuc ? ResponseEntity.ok("Onaylandı") : ResponseEntity.badRequest().body("Hata");
     }
 }
-
-// Frontend'den gelen { "uyeId": 1, "kitapId": 5 } verisini tutan kutu
 class OduncIstegi {
-    private Integer uyeId;
-    private Integer kitapId;
-
-    public Integer getUyeId() { return uyeId; }
-    public void setUyeId(Integer uyeId) { this.uyeId = uyeId; }
-    public Integer getKitapId() { return kitapId; }
-    public void setKitapId(Integer kitapId) { this.kitapId = kitapId; }
+    private Integer uyeId; private Integer kitapId;
+    public Integer getUyeId() { return uyeId; } public void setUyeId(Integer uyeId) { this.uyeId = uyeId; }
+    public Integer getKitapId() { return kitapId; } public void setKitapId(Integer kitapId) { this.kitapId = kitapId; }
 }
