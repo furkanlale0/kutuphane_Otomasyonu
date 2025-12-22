@@ -49,7 +49,7 @@ public interface OduncRepository extends JpaRepository<OduncIslemi, Integer> {
     List<OduncIslemi> findByUye_UyeId(Integer uyeId);
 
     /*
-     * MÜKERRER İŞLEM KONTROLÜ
+     * TEKRAR EDEN İŞLEM KONTROLÜ
      * Bir üyenin aynı kitabı iade etmeden ikinci kez almasını engeller.
      * Mantık hatasını ve stok tutarsızlığını önler.
      */

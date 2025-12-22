@@ -35,12 +35,11 @@ public class GuvenlikYapilandirmasi {
                         ).permitAll()
 
                         // 2. SADECE UYE VE ADMINLER (Giris yapmis herkes)
-                        // HATA BURADAYDI: /api/loans yerine /api/odunc yazdik!
                         .requestMatchers("/api/odunc/**").authenticated()
                         .requestMatchers("/api/uyeler/**").authenticated()
 
                         // 3. ADMIN OZEL ISLEMLERI (Kitap silme/ekleme)
-                        .requestMatchers("/api/kitaplar/**").authenticated() // Detayli yetki sonra ayarlanabilir
+                        .requestMatchers("/api/kitaplar/**").authenticated()
 
                         .anyRequest().authenticated()
                 )

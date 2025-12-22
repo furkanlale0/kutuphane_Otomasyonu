@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * Normalde veritabanı boşsa otomatik Admin ekler.
  *
  * ŞU ANKİ DURUM:
- * Sunum kendi bilgisayarımızdan yapılacağı ve Admin zaten kayıtlı olduğu için
+ * Sunum kendi bilgisayarımdan yapılacağı ve Admin zaten kayıtlı olduğu için
  * tüm otomatik veri ekleme kodları devre dışı bırakılmıştır.
  */
 @Component

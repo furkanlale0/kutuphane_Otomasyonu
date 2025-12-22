@@ -9,7 +9,7 @@ import java.util.Map;
 
 /*
  * BU SINIF NE İŞE YARAR?
- * Kütüphane işlemlerini (Ödünç, İade, Ceza) yöneten kontrolcüdür.
+ * Kütüphane işlemlerini (Ödünç, İade, Ceza), yöneten kontrolcüdür.
  * Frontend'den gelen "Kitap Al", "İade Et", "Borç Öde" gibi istekleri karşılar
  * ve gerekli mantığı çalıştırması için Servis katmanına iletir.
  */

@@ -2,14 +2,20 @@ const API_URL = "http://localhost:8080/api";
 let tumKitaplar = [];
 
 // --- YARDIMCILAR ---
+
+// Ekrana geçici bilgi mesajı (sağ üstte çıkan yeşil kutucuk) basar.
 function showToast(title, icon = 'success') {
     Swal.fire({ title: title, icon: icon, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, background: '#1e1e1e', color: '#fff' });
 }
+
+// Hata veya uyarı durumunda kullanıcıyı durduran (Tamam butonu olan) pencere açar.
 function showPopup(title, text, icon = 'error') {
     Swal.fire({ title: title, text: text, icon: icon, background: '#1e1e1e', color: '#fff' });
 }
 
 // --- BASLANGIC ---
+
+// Sayfa ilk yüklendiğinde çalışır; kimlik kontrolü yapar ve verileri çeker.
 document.addEventListener("DOMContentLoaded", () => {
     if (window.location.pathname.includes("dashboard.html")) {
         kimlikKontrolu();
@@ -29,7 +35,9 @@ document.addEventListener("DOMContentLoaded", () => {
     formlariHazirla();
 });
 
-// --- KITAP YUKLE ---
+// --- KITAP ISLEMLERI ---
+
+// Backend'den güncel kitap listesini çeker ve ekrandaki tabloyu yeniler.
 async function kitaplariYukle() {
     const token = localStorage.getItem("jwtToken");
     try {
@@ -41,9 +49,9 @@ async function kitaplariYukle() {
         }
     } catch (e) { console.error(e); }
 }
-// --- KITAP SILME ISLEMI ---
+
+// Admin onayıyla seçilen kitabı veritabanından kalıcı olarak siler.
 window.kitapSil = async function(kitapId) {
-    // 1. Emin misin diye sor
     const result = await Swal.fire({
         title: 'Emin misiniz?',
         text: "Bu kitap kalıcı olarak silinecek!",
@@ -62,19 +70,15 @@ window.kitapSil = async function(kitapId) {
     const token = localStorage.getItem("jwtToken");
 
     try {
-        // 2. Backend'e DELETE istegi at
         const res = await fetch(`${API_URL}/kitaplar/${kitapId}`, {
             method: "DELETE",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            }
+            headers: { "Authorization": `Bearer ${token}` }
         });
 
         if (res.ok) {
             showToast("Kitap başarıyla silindi!");
-            kitaplariYukle(); // Listeyi yenile ki silinen kitap gitsin
+            kitaplariYukle();
         } else {
-            // Hata mesajini oku (Orn: Kullanimda oldugu icin silinemedi)
             const hataMesaji = await res.text();
             showPopup("Silinemedi", hataMesaji);
         }
@@ -84,6 +88,7 @@ window.kitapSil = async function(kitapId) {
     }
 };
 
+// Kitap verilerini HTML tablosuna döker ve role göre butonları ayarlar.
 function tabloyuCiz(kitaplar) {
     const tbody = document.getElementById("bookListBody");
     const role = localStorage.getItem("kullaniciRolu");
@@ -115,7 +120,9 @@ function tabloyuCiz(kitaplar) {
     });
 }
 
-// --- ODUNC AL ---
+// --- ODUNC VE IADE ---
+
+// Üyeye kuralları onaylatıp seçilen kitabı ödünç alma isteğini gönderir.
 window.oduncAl = async function(kitapId) {
     const result = await Swal.fire({ title: 'Onay', html: `
             <div class="text-start">
@@ -139,7 +146,6 @@ window.oduncAl = async function(kitapId) {
             body: JSON.stringify({ uyeId: uyeId, kitapId: kitapId })
         });
 
-        // Backend'den gelen cevabi (text veya json) duzgun oku
         const cevapMetni = await res.text();
 
         if (res.ok) {
@@ -147,13 +153,12 @@ window.oduncAl = async function(kitapId) {
             kitaplariYukle();
             aktifOdunclerimiYukle();
         } else {
-            // Hatayi ekrana bas
             showPopup("Hata Oluştu", cevapMetni);
         }
     } catch (e) { showPopup("Sunucu Hatası", "Bağlantı kurulamadı."); }
 };
 
-// --- IADE ET ---
+// Üyenin elindeki kitabı iade etme işlemini gerçekleştirir.
 window.iadeEt = async function(kitapId) {
     if(!confirm("İade edilsin mi?")) return;
     const token = localStorage.getItem("jwtToken");
@@ -173,7 +178,7 @@ window.iadeEt = async function(kitapId) {
     } catch (e) { console.error(e); }
 };
 
-// --- YAN MENU (AKTIFLER) ---
+// Üyenin şu an elinde bulunan (iade etmediği) kitapları yan menüde listeler.
 async function aktifOdunclerimiYukle() {
     const token = localStorage.getItem("jwtToken");
     const uyeId = localStorage.getItem("kullaniciId");
@@ -196,33 +201,25 @@ async function aktifOdunclerimiYukle() {
     } catch (e) { console.error(e); }
 }
 
-// --- MODALLAR VE BUTONLAR ---
+// --- PROFIL VE ODEME ---
 
-// --- PROFIL VE CEZA DETAYLARI ---
-// --- UYE: PROFIL (AKTIF CEZA GORUNUMU EKLENDI) ---
+// Üyenin adını, güncel ceza/borç detaylarını ve tutarları modal içinde gösterir.
 window.profilAc = async function() {
     const rol = localStorage.getItem("kullaniciRolu");
-    const adSoyad = localStorage.getItem("adSoyad") || "Kullanıcı"; // Ismi al
+    const adSoyad = localStorage.getItem("adSoyad") || "Kullanıcı";
 
-    // 1. ISMI YAZDIR ("Yükleniyor" yerine isim gelecek)
     document.getElementById("profName").innerText = adSoyad;
 
-    // --- ADMIN ISE ---
+    // Admin ise borç detaylarını gösterme
     if(rol === "ADMIN") {
         document.getElementById("profName").innerText = adSoyad + " (Yönetici)";
-
-        // Admin icin borc kutularini GIZLE
-        // Not: HTML'deki ID'lere gore gizliyoruz.
-        // Eger ID bulamazsa hata vermemesi icin "?." kullaniyoruz
         document.querySelector("#profileModal .card")?.style.setProperty("display", "none", "important");
         document.getElementById("debtDetailsContainer")?.parentElement.style.setProperty("display", "none", "important");
-
         new bootstrap.Modal(document.getElementById('profileModal')).show();
         return;
     }
 
-    // --- UYE ISE ---
-    // Uye icin her seyi goster
+    // Üye ise detayları çek
     document.querySelector("#profileModal .card")?.style.removeProperty("display");
     document.getElementById("debtDetailsContainer")?.parentElement.style.removeProperty("display");
 
@@ -236,9 +233,6 @@ window.profilAc = async function() {
 
         if (res.ok) {
             const data = await res.json();
-            // ... (Tablo oluşturma kodları aynen kalacak) ...
-            // Sadece tabloyu doldurma kısmı aynı, burayı tekrar yazmıyorum
-            // Önceki cevaptaki tablo oluşturma kodunu buraya koyabilirsin.
             let toplamBorc = 0;
             let bekleyenBorc = 0;
 
@@ -291,11 +285,10 @@ window.profilAc = async function() {
     } catch (e) { console.error(e); }
 };
 
-// --- ODEME MODALI AC ---
+// Aktif borç varsa profil penceresini kapatıp ödeme bildirim penceresini açar.
 window.openPaymentModal = function() {
     const borcText = document.getElementById("profDebt").innerText;
 
-    // Eger 0 TL ise veya Onay Bekliyorsa acma
     if (borcText === "0 TL" || borcText.includes("Onay")) {
         Swal.fire({
             title: 'İşlem Gerekmiyor',
@@ -306,12 +299,11 @@ window.openPaymentModal = function() {
         return;
     }
 
-    // Profili kapat odemeyi ac
     bootstrap.Modal.getInstance(document.getElementById('profileModal')).hide();
     new bootstrap.Modal(document.getElementById('paymentModal')).show();
 };
 
-// --- ODEME BILDIR (Process Payment) ---
+// Üyenin borcunu ödediğine dair sisteme bildirim ("Onay Bekliyor") gönderir.
 window.processPayment = async function() {
     const token = localStorage.getItem("jwtToken");
     const uyeId = localStorage.getItem("kullaniciId");
@@ -330,7 +322,9 @@ window.processPayment = async function() {
     } catch(e) { console.error(e); }
 };
 
-// --- ADMIN: CEZALAR VE ONAY ---
+// --- ADMIN ISLEMLERI ---
+
+// Admin panelinde tüm üyelerin ödenmemiş veya onay bekleyen cezalarını listeler.
 window.cezalarAc = async function() {
     const token = localStorage.getItem("jwtToken");
     try {
@@ -341,27 +335,31 @@ window.cezalarAc = async function() {
             tbody.innerHTML = "";
 
             if (data.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='5' class='text-center text-muted'>Tahsil edilecek ceza yok.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='5' class='text-center text-muted'>Hiç ceza yok.</td></tr>";
             } else {
                 data.forEach(c => {
-                    let buton = "";
-                    let durumBadge = "";
+                    let durumHtml = "";
+                    let islemButonu = "";
 
-                    if(c.durum === "ONAY_BEKLIYOR") {
-                        durumBadge = '<span class="badge bg-warning text-dark">Onay Bekliyor</span>';
-                        buton = `<button class="btn btn-sm btn-success" onclick="cezaOnayla(${c.oduncId})">Onayla</button>`;
-                    } else {
-                        durumBadge = '<span class="badge bg-danger">Ödenmedi</span>';
-                        buton = `<span class="text-muted small">Bildirim Bekleniyor</span>`;
+                    if (c.durum === "AKTIF_GECIKME") {
+                        durumHtml = '<span class="badge bg-secondary">Kitap Üyede (Gecikmiş)</span>';
+                        islemButonu = '<span class="text-muted small">İade Bekleniyor</span>';
+                    } else if (c.durum === "ONAY_BEKLIYOR") {
+                        durumHtml = '<span class="badge bg-warning text-dark">Onay Bekliyor</span>';
+                        islemButonu = `<button class="btn btn-sm btn-success" onclick="cezaOnayla(${c.oduncId})">Onayla</button>`;
+                    } else if (c.durum === "ODENMEDI") {
+                        durumHtml = '<span class="badge bg-danger">Ödenmedi</span>';
+                        islemButonu = '<span class="text-muted small">Ödeme Bekleniyor</span>';
                     }
 
                     tbody.innerHTML += `
                         <tr>
-                            <td>${c.uyeAd}</td>
-                            <td>${c.kitapAd}</td>
+                            <td>${c.uye}</td>
+                            <td>${c.kitap}</td>
+                            <td class="text-warning">${c.gecikme}</td>
                             <td class="text-danger fw-bold">${c.tutar} TL</td>
-                            <td>${durumBadge}</td>
-                            <td>${buton}</td>
+                            <td>${durumHtml}</td>
+                            <td>${islemButonu}</td>
                         </tr>`;
                 });
             }
@@ -370,7 +368,7 @@ window.cezalarAc = async function() {
     } catch (e) { console.error(e); }
 };
 
-// --- ADMIN ONAYLA FONKSIYONU ---
+// Adminin, üyenin ödeme bildirimini onaylayıp borcu silmesini sağlar.
 window.cezaOnayla = async function(oduncId) {
     const token = localStorage.getItem("jwtToken");
     try {
@@ -380,11 +378,14 @@ window.cezaOnayla = async function(oduncId) {
         });
         if(res.ok) {
             showToast("Tahsilat Onaylandı!");
-            cezalarAc(); // Listeyi yenile
+            cezalarAc();
         }
     } catch(e) { console.error(e); }
 };
-// 2. Geçmiş Modalı
+
+// --- DIGER MODALLAR ---
+
+// Üyenin geçmişte alıp iade ettiği tüm kitap hareketlerini listeler.
 window.gecmisAc = async function() {
     const token = localStorage.getItem("jwtToken");
     const uyeId = localStorage.getItem("kullaniciId");
@@ -404,53 +405,7 @@ window.gecmisAc = async function() {
     } catch (e) { console.error(e); }
 };
 
-// --- ADMIN: CEZALAR (UNDEFINED SORUNU ÇÖZÜLDÜ) ---
-window.cezalarAc = async function() {
-    const token = localStorage.getItem("jwtToken");
-    try {
-        const res = await fetch(`${API_URL}/odunc/admin/cezalar`, { headers: { "Authorization": `Bearer ${token}` } });
-        if (res.ok) {
-            const data = await res.json();
-            const tbody = document.getElementById("adminFinesBody");
-            tbody.innerHTML = "";
-
-            if (data.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='5' class='text-center text-muted'>Hiç ceza yok.</td></tr>";
-            } else {
-                data.forEach(c => {
-                    let durumHtml = "";
-                    let islemButonu = "";
-
-                    // Duruma göre renk ve buton ayarla
-                    if (c.durum === "AKTIF_GECIKME") {
-                        durumHtml = '<span class="badge bg-secondary">Kitap Üyede (Gecikmiş)</span>';
-                        islemButonu = '<span class="text-muted small">İade Bekleniyor</span>';
-                    } else if (c.durum === "ONAY_BEKLIYOR") {
-                        durumHtml = '<span class="badge bg-warning text-dark">Onay Bekliyor</span>';
-                        islemButonu = `<button class="btn btn-sm btn-success" onclick="cezaOnayla(${c.oduncId})">Onayla</button>`;
-                    } else if (c.durum === "ODENMEDI") {
-                        durumHtml = '<span class="badge bg-danger">Ödenmedi</span>';
-                        islemButonu = '<span class="text-muted small">Ödeme Bekleniyor</span>';
-                    }
-
-                    // Burada backend'den gelen "c.uye", "c.kitap" isimlerini kullanıyoruz!
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${c.uye}</td>
-                            <td>${c.kitap}</td>
-                            <td class="text-warning">${c.gecikme}</td>
-                            <td class="text-danger fw-bold">${c.tutar} TL</td>
-                            <td>${durumHtml}</td>
-                            <td>${islemButonu}</td>
-                        </tr>`;
-                });
-            }
-            new bootstrap.Modal(document.getElementById('adminFinesModal')).show();
-        }
-    } catch (e) { console.error(e); }
-};
-
-// Diğerleri
+// Seçilen kitabın yazar, stok ve özet bilgilerini detaylı pencerede açar.
 window.detayGoster = function(id) {
     const k = tumKitaplar.find(x => x.kitapId === id);
     if(k) {
@@ -461,8 +416,12 @@ window.detayGoster = function(id) {
     }
 };
 
+// Tarayıcıdaki oturum bilgilerini (Token) temizler ve çıkış yaptırır.
 window.cikisYap = function() { localStorage.clear(); window.location.href="index.html"; };
 
+// --- ORTAK FONKSIYONLAR ---
+
+// Token kontrolü yapar ve arayüzü role (Admin/Üye) göre düzenler.
 function kimlikKontrolu() {
     if(!localStorage.getItem("jwtToken")) window.location.href = "index.html";
     const rol = localStorage.getItem("kullaniciRolu");
@@ -476,11 +435,13 @@ function kimlikKontrolu() {
     }
 }
 
+// Toplam kitap ve stok sayılarını hesaplayıp panoya yazar.
 function istatistikleriGuncelle(data) {
     document.getElementById("totalBooksCount").innerText = data.length;
     document.getElementById("availableBooksCount").innerText = data.reduce((t, c) => t + (c.stokSayisi || 0), 0);
 }
 
+// Giriş, Kayıt ve Kitap Ekleme formlarının gönderilme olaylarını yönetir.
 function formlariHazirla() {
     // Login
     const lf = document.getElementById("loginForm");
@@ -498,10 +459,7 @@ function formlariHazirla() {
                 localStorage.setItem("jwtToken", data.token);
                 localStorage.setItem("kullaniciRolu", data.rol);
                 localStorage.setItem("kullaniciId", data.id);
-
-                // YENİ: İsmi kaydet
                 localStorage.setItem("adSoyad", data.adSoyad);
-
                 window.location.href = "dashboard.html";
             } else { showPopup("Hata", "Giriş başarısız!"); }
         } catch(e) { console.error(e); }

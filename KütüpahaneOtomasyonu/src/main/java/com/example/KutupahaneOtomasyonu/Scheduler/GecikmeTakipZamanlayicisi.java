@@ -50,7 +50,7 @@ public class GecikmeTakipZamanlayicisi {
 
         for (OduncIslemi islem : gecikenler) {
 
-            // Eğer üyeye daha önce mail atıldıysa tekrar atma (Mükerrer Bildirim Kontrolü)
+            // Eğer üyeye daha önce mail atıldıysa tekrar atma (Tekrar Bildirim Kontrolü)
             if (islem.isBildirimGonderildi()) {
                 continue;
             }
@@ -62,10 +62,10 @@ public class GecikmeTakipZamanlayicisi {
                 String mesaj = "Sayın üyemiz, '" + kitapAdi + "' isimli kitabın teslim süresi dolmuştur. Lütfen iade ediniz.";
                 epostaServisi.mailGonder(uyeEmail, "Kütüphane - Gecikme Uyarısı", mesaj);
 
-                System.out.println("✅ Mail gitti: " + uyeEmail);
+                System.out.println("Mail gitti: " + uyeEmail);
             } catch (Exception e) {
                 // Mail gönderiminde hata olsa bile sistem çalışmaya devam etmeli (Fault Tolerance).
-                System.err.println("❌ Mail hatasi (" + uyeEmail + "): " + e.getMessage());
+                System.err.println("Mail hatasi (" + uyeEmail + "): " + e.getMessage());
             }
 
             /*

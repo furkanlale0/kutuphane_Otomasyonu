@@ -27,7 +27,7 @@ public class KitapController {
         return kitapRepository.save(kitap);
     }
 
-    // 3. KITAP SIL (BUNU EKLIYORUZ)
+    // 3. KITAP SIL
     @DeleteMapping("/{id}")
     public ResponseEntity<?> kitapSil(@PathVariable Integer id) {
         try {

@@ -8,8 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 public class SifrelemeYapilandirmasi {
 
-    // Sifreleyiciyi buraya aldik.
-    // Bu sinifin baska hicbir servise ihtiyaci olmadigi icin dongu olusmaz.
+    //bu sınıf şifreleri hashler yani kullanıcı 1234 gibi kolay bir şifre girse bile veri tabanına karmaşık şekilde kaydeder
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
