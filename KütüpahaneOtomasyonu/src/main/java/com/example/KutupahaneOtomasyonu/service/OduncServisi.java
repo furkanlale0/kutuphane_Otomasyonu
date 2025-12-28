@@ -32,7 +32,7 @@ public class OduncServisi {
 
         if(borcluMu) return "Ödenmemiş cezanız varken yeni kitap alamazsınız!";
 
-        // --- KONTROL 2 (YENİ EKLENDİ): AYNI KİTAP ZATEN ELİNDE Mİ? ---
+        // --- KONTROL 2: AYNI KİTAP ZATEN ELİNDE Mİ? ---
         boolean ayniKitapSendeMi = oduncRepository.findAll().stream()
                 .anyMatch(o -> o.getUye().getUyeId().equals(uyeId) &&      // Bu üye
                         o.getKitap().getKitapId().equals(kitapId) && // Bu kitap

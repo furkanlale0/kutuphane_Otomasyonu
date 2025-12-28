@@ -46,10 +46,10 @@ public class EpostaServisi {
         // 3. Gönderim işleminin gerçekleştirilmesi
         try {
             mailSender.send(mesaj);
-            System.out.println("✅ E-posta başarıyla gönderildi: " + alici);
+            System.out.println("E-posta başarıyla gönderildi: " + alici);
         } catch (Exception e) {
             // Ağ hatası veya hatalı e-posta durumunda sistemin çökmemesi için hata yakalanır.
-            System.err.println("❌ E-posta gönderim hatası: " + e.getMessage());
+            System.err.println("E-posta gönderim hatası: " + e.getMessage());
         }
     }
 }

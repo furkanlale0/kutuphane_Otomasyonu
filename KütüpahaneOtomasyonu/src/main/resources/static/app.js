@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if(localStorage.getItem("kullaniciRolu") === "UYE") aktifOdunclerimiYukle();
 
         // Arama
+        //arama işlemi backendde yapılmıyor tarayıcıda yapılıyor.
         const searchInput = document.getElementById("searchInput");
         if(searchInput) {
             searchInput.addEventListener("input", (e) => {
